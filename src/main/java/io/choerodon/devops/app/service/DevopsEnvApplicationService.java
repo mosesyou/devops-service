@@ -1,22 +1,64 @@
 package io.choerodon.devops.app.service;
 
-import io.choerodon.devops.api.dto.ApplicationRepDTO;
-import io.choerodon.devops.api.dto.DevopsEnvApplicationDTO;
-import io.choerodon.devops.api.dto.DevopsEnvLabelDTO;
-import io.choerodon.devops.api.dto.DevopsEnvPortDTO;
-
 import java.util.List;
+import java.util.Map;
+
+import io.choerodon.devops.api.vo.*;
+import io.choerodon.devops.api.vo.iam.DevopsEnvMessageVO;
+import io.choerodon.devops.infra.dto.DevopsEnvAppServiceDTO;
 
 /**
  * @author lizongwei
  * @date 2019/7/1
  */
 public interface DevopsEnvApplicationService {
-    DevopsEnvApplicationDTO create(DevopsEnvApplicationDTO devopsEnvApplicationDTO);
+    List<DevopsEnvApplicationVO> batchCreate(DevopsEnvAppServiceVO devopsEnvAppServiceVO);
 
-    List<ApplicationRepDTO> queryAppByEnvId(Long envId);
+    /**
+     * 删除与该环境关联的应用
+     * @param envId
+     * @param appServiceId
+     */
+    void delete(Long envId,Long appServiceId);
 
-    List<DevopsEnvLabelDTO> queryLabelByAppEnvId(Long envId, Long appId);
+    /**
+     * 查询环境下的所有应用
+     *
+     * @param envId
+     * @return
+     */
+    List<AppServiceRepVO> listAppByEnvId(Long envId);
 
-    List<DevopsEnvPortDTO> queryPortByAppEnvId(Long envId, Long appId);
+    /**
+     * 查询应用在环境下的所有label
+     *
+     * @param envId
+     * @param appServiceId
+     * @return
+     */
+    List<Map<String,String>> listLabelByAppAndEnvId(Long envId, Long appServiceId);
+
+    /**
+     * 查询应用在环境下的所有端口
+     *
+     * @param envId
+     * @param appServiceId
+     * @return
+     */
+    List<DevopsEnvPortVO> listPortByAppAndEnvId(Long envId, Long appServiceId);
+
+    DevopsEnvAppServiceDTO baseCreate(DevopsEnvAppServiceDTO devopsEnvAppServiceDTO);
+
+    List<Long> baseListAppByEnvId(Long envId);
+
+    List<DevopsEnvMessageVO> baseListResourceByEnvAndApp(Long envId, Long appServiceId);
+
+    /**
+     * 查询项目下可用的且没有与该环境关联的应用
+     *
+     * @param projectId 项目id
+     * @param envId     环境id
+     * @return 应用列表
+     */
+    List<BaseApplicationServiceVO> listNonRelatedAppService(Long projectId, Long envId);
 }

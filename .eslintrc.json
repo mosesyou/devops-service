@@ -15,7 +15,8 @@
   },
   "plugins": [
     "react",
-    "jsx-a11y"
+    "jsx-a11y",
+    "react-hooks"
   ],
   "extends": [
     "airbnb"
@@ -24,6 +25,7 @@
     "jsx-a11y/interactive-supports-focus": "off",
     "jsx-a11y/anchor-has-content": "off",
     "jsx-a11y/href-no-hash": "off",
+    "react/state-in-constructor": "off",
     "jsx-a11y/click-events-have-key-events": "off",
     "jsx-a11y/no-static-element-interactions": "off",
     "jsx-a11y/anchor-is-valid": [
@@ -50,6 +52,8 @@
         "ignorePureComponents": true
       }
     ],
+    "react/jsx-props-no-spreading": "off",
+    "react/static-property-placement": "off",
     "comma-dangle": [
       2,
       "always-multiline"
@@ -59,6 +63,7 @@
     "import/no-duplicates": "off",
     "import/no-named-as-default": "off",
     "import/no-named-as-default-member": "off",
+    "import/prefer-default-export": "off",
     "no-trailing-spaces": "off",
     "class-methods-use-this": "off",
     "import/no-extraneous-dependencies": "off",
@@ -69,7 +74,9 @@
     "react/prop-types": "off",
     "react/jsx-filename-extension": "off",
     "react/require-default-props": "off",
+    "arrow-parens": "off",
     "no-unused-vars": "off",
+    "no-underscore-dangle": "off",
     "no-console": "error",
     "no-debugger": "error",
     "no-unused-expressions": "off",
@@ -78,13 +85,17 @@
     "global-require": "off",
     "import/no-dynamic-require": "off",
     "max-len": "off",
+    "react/jsx-fragments": "off",
     "object-curly-newline": "off",
     "react/destructuring-assignment": "off",
     "react/jsx-wrap-multilines": "off",
     "react/jsx-closing-tag-location": "off",
     "react/jsx-one-expression-per-line": "off",
+    "react/forbid-prop-types": "off",
     "react/sort-comp": "off",
-    "prefer-destructuring": "off"
+    "prefer-destructuring": "off",
+    "react-hooks/rules-of-hooks": "error",
+    "no-plusplus": ["error", { "allowForLoopAfterthoughts": true }]
   },
   "globals": {
     "Choerodon": true

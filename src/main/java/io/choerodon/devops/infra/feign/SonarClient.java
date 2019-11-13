@@ -1,8 +1,11 @@
 package io.choerodon.devops.infra.feign;
 
+import java.util.List;
 import java.util.Map;
 
-import io.choerodon.devops.api.dto.sonar.*;
+import io.choerodon.devops.api.vo.sonar.*;
+
+import okhttp3.ResponseBody;
 import retrofit2.Call;
 import retrofit2.http.GET;
 import retrofit2.http.POST;
@@ -14,7 +17,7 @@ import retrofit2.http.QueryMap;
 public interface SonarClient {
 
     @GET("api/measures/component")
-    Call<SonarComponent> getSonarComponet(@QueryMap Map<String, String> maps);
+    Call<SonarComponent> getSonarComponent(@QueryMap Map<String, String> maps);
 
     @GET("api/project_analyses/search")
     Call<SonarAnalyses> getAnalyses(@QueryMap Map<String, String> maps);
@@ -49,4 +52,12 @@ public interface SonarClient {
     @GET("api/components/search_projects?ps=50")
     Call<Projects> listProject();
 
+    @GET("api/users/current")
+    Call<Void> getUser();
+
+    @POST("api/user_tokens/generate")
+    Call<ResponseBody> createToken(@QueryMap Map<String, String> maps);
+
+    @GET("api/user_tokens/search")
+    Call<ResponseBody> listToken();
 }

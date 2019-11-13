@@ -55,4 +55,22 @@ databaseChangeLog(logicalFilePath: 'dba/devops_app_versionion.groovy') {
             column(name: 'publish_time', type: 'DATETIME', remarks: 'publish time', afterColumn: 'is_publish')
         }
     }
+
+    changeSet(author: 'scp', id: '2019-07-29-rename-column') {
+        renameColumn(columnDataType: 'BIGINT UNSIGNED', newColumnName: 'app_service_id', oldColumnName: 'app_id', tableName: 'devops_app_version')
+    }
+
+
+    changeSet(author: 'sheep', id: '2019-8-05-rename-table') {
+        renameTable(newTableName: 'devops_app_service_version', oldTableName: 'devops_app_version')
+    }
+
+    changeSet(author: 'scp', id: '2019-10-16-add-drop-column') {
+        addColumn(tableName: 'devops_app_service_version') {
+            column(name: 'harbor_config_id', type: 'BIGINT UNSIGNED', afterColumn: 'id', remarks: '配置Id')
+            column(name: 'helm_config_id', type: 'BIGINT UNSIGNED', afterColumn: 'id', remarks: '配置Id')
+        }
+        dropColumn(columnName: "is_publish", tableName: "devops_app_service_version")
+        dropColumn(columnName: "publish_time", tableName: "devops_app_service_version")
+    }
 }

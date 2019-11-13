@@ -1,23 +1,22 @@
 package io.choerodon.devops.app.service.impl;
 
-import io.choerodon.core.exception.CommonException;
-import io.choerodon.devops.api.dto.ProjectConfigDTO;
-import io.choerodon.devops.app.service.ProjectConfigHarborService;
-import io.choerodon.devops.domain.application.entity.ProjectE;
-import io.choerodon.devops.domain.application.repository.IamRepository;
-import io.choerodon.devops.infra.config.ConfigurationProperties;
-import io.choerodon.devops.infra.config.RetrofitHandler;
-import io.choerodon.devops.infra.dataobject.harbor.Project;
-import io.choerodon.devops.infra.dataobject.harbor.ProjectDetail;
-import io.choerodon.devops.infra.feign.HarborClient;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import java.io.IOException;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import retrofit2.Response;
 import retrofit2.Retrofit;
 
-import java.io.IOException;
+import io.choerodon.core.exception.CommonException;
+import io.choerodon.devops.api.vo.ConfigVO;
+import io.choerodon.devops.app.service.ProjectConfigHarborService;
+import io.choerodon.devops.infra.config.ConfigurationProperties;
+import io.choerodon.devops.infra.dto.harbor.Project;
+import io.choerodon.devops.infra.dto.iam.OrganizationDTO;
+import io.choerodon.devops.infra.dto.iam.ProjectDTO;
+import io.choerodon.devops.infra.feign.HarborClient;
+import io.choerodon.devops.infra.feign.operator.BaseServiceClientOperator;
+import io.choerodon.devops.infra.handler.RetrofitHandler;
 
 /**
  * @author zongw.lee@gmail.com
@@ -25,25 +24,23 @@ import java.io.IOException;
  */
 @Component
 public class ProjectConfigHarborServiceImpl implements ProjectConfigHarborService {
-
-    private static final Logger LOGGER = LoggerFactory.getLogger(ProjectConfigHarborServiceImpl.class);
-
     @Autowired
-    IamRepository iamRepository;
+    private BaseServiceClientOperator baseServiceClientOperator;
 
     //创建harbor仓库
     @Override
-    public void createHarbor(ProjectConfigDTO config, Long projectId) {
+    public void createHarbor(ConfigVO config, Long projectId) {
         try {
             ConfigurationProperties configurationProperties = new ConfigurationProperties(config);
             configurationProperties.setType("harbor");
             Retrofit retrofit = RetrofitHandler.initRetrofit(configurationProperties);
             HarborClient harborClient = retrofit.create(HarborClient.class);
-            Response<Void> result = null;
+            Response<Void> result;
 
-            ProjectE projectE = iamRepository.queryIamProject(projectId);
+            ProjectDTO projectDTO = baseServiceClientOperator.queryIamProjectById(projectId);
+            OrganizationDTO organizationDTO = baseServiceClientOperator.queryOrganizationById(projectDTO.getOrganizationId());
             result = harborClient.insertProject(new Project(
-                    projectE.getOrganization().getCode() + "-" + projectE.getCode(), 1)).execute();
+                    organizationDTO.getCode() + "-" + projectDTO.getCode(), 1)).execute();
 
             if (result.raw().code() != 201) {
                 throw new CommonException(result.errorBody().string());

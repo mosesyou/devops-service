@@ -2,7 +2,7 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
 
 <mapper namespace="io.choerodon.devops.infra.mapper.PipelineRecordMapper">
-    <select id="listByOptions" resultType="io.choerodon.devops.infra.dataobject.PipelineRecordDO">
+    <select id="listByOptions" resultType="io.choerodon.devops.infra.dto.PipelineRecordDTO">
         <if test="classifyParam.executed ==null and classifyParam.pendingcheck == null and classifyParam.reviewed==null">
             <include refid="selectSql"/>
             <if test="pipelineId != null">
@@ -113,7 +113,7 @@
 
     </select>
 
-    <select id="queryById" resultType="io.choerodon.devops.infra.dataobject.PipelineRecordDO">
+    <select id="queryById" resultType="io.choerodon.devops.infra.dto.PipelineRecordDTO">
         SELECT
         dpr.id,
         dpr. STATUS,
@@ -133,25 +133,44 @@
         WHERE dpr.id = #{pipelineRecordId}
     </select>
 
+
+    <select id="listAllPipelineRecordAndEnv" resultType="io.choerodon.devops.infra.dto.PipelineRecordDTO">
+        SELECT
+        dpr.id,
+        dpr.project_id,
+        dpr.`status`,
+        dpr.creation_date,
+        GROUP_CONCAT( DISTINCT dpad.env_id ) env
+        FROM
+        devops_pipeline_record dpr
+        LEFT JOIN devops_pipeline_stage dps ON dpr.pipeline_id = dps.pipeline_id
+        LEFT JOIN devops_pipeline_task dpt ON dpt.stage_id = dps.id
+        LEFT JOIN devops_pipeline_app_service_deploy dpad ON dpad.id = dpt.app_service_deploy_id
+        <if test="pipelineRecordId != null">
+            WHERE dpr.id = #{pipelineRecordId}
+        </if>
+        GROUP BY
+        dpr.id
+    </select>
+
     <sql id="sqlparam">
         <if test='searchParam != null'>
-            <if test='searchParam.status != null and searchParam.status.size > 0'>
+            <if test='searchParam.status != null and searchParam.status.length > 0'>
                 AND
-                <foreach collection="searchParam.status" item="status" open="(" separator=" OR " close=")">
-                    dpr.status = #{status, jdbcType=VARCHAR}
-                </foreach>
+                    dpr.status = #{searchParam.status, jdbcType=VARCHAR}
             </if>
-            <if test='searchParam.triggerType != null and searchParam.triggerType.size > 0'>
+            <if test='searchParam.triggerType != null and searchParam.triggerType.length > 0'>
                 AND
-                <foreach collection="searchParam.triggerType" item="triggerType">
-                    dpr.trigger_type = #{triggerType, jdbcType=VARCHAR}
-                </foreach>
+                    dpr.trigger_type = #{searchParam.triggerType, jdbcType=VARCHAR}
             </if>
         </if>
-        <if test='param != null and param != ""'>
-            AND ( dpr.status = #{param, jdbcType=VARCHAR}
-            OR dpr.trigger_type = #{param, jdbcType=VARCHAR}
-            OR dpr.pipeline_name= #{param, jdbcType=VARCHAR})
+        <if test='params != null and params.size>0'>
+            AND
+            <foreach collection="params" item="param" open="(" separator=" OR " close=")">
+                ( dpr.status = #{param, jdbcType=VARCHAR}
+                OR dpr.trigger_type = #{param, jdbcType=VARCHAR}
+                OR dpr.pipeline_name= #{param, jdbcType=VARCHAR})
+            </foreach>
         </if>
     </sql>
 
@@ -215,5 +234,16 @@
         WHERE
             dpurr.task_record_id = dptr.id
         OR dpurr.stage_record_id = dpsr.id
+    </select>
+
+    <select id="listAllPipelineRecordToMigrate" resultType="io.choerodon.devops.infra.dto.PipelineRecordDTO">
+        SELECT dpr.id, dpr.project_id, dpr.`status`, dpr.creation_date, GROUP_CONCAT(DISTINCT dpad.env_id) env
+        FROM devops_pipeline_record dpr
+                 LEFT JOIN devops_pipeline_stage dps ON dpr.pipeline_id = dps.pipeline_id
+                 LEFT JOIN devops_pipeline_task dpt ON dpt.stage_id = dps.id
+                 LEFT JOIN devops_pipeline_app_service_deploy dpad ON dpad.id = dpt.app_service_deploy_id
+                 LEFT JOIN devops_deploy_record ddr ON dpr.id = ddr.deploy_id AND ddr.deploy_type = 'auto'
+        WHERE ddr.id IS NULL
+        GROUP BY dpr.id;
     </select>
 </mapper>

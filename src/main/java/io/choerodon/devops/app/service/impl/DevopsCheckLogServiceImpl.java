@@ -1,562 +1,102 @@
 package io.choerodon.devops.app.service.impl;
 
+import static io.choerodon.core.iam.InitRoleCode.PROJECT_OWNER;
+
 import java.io.IOException;
-import java.text.ParseException;
-import java.text.SimpleDateFormat;
-import java.util.ArrayList;
-import java.util.Date;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
-import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import com.alibaba.fastjson.JSON;
-import com.alibaba.fastjson.JSONArray;
 import com.github.pagehelper.PageInfo;
-import com.google.gson.Gson;
 import com.zaxxer.hikari.util.UtilityElf;
-import io.kubernetes.client.models.V1Pod;
-import org.apache.commons.lang.StringUtils;
-import org.eclipse.jgit.api.Git;
-import org.eclipse.jgit.api.errors.GitAPIException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
-import org.yaml.snakeyaml.DumperOptions;
-import org.yaml.snakeyaml.Yaml;
-import org.yaml.snakeyaml.nodes.Tag;
+import org.springframework.util.CollectionUtils;
+import org.springframework.util.ObjectUtils;
+import retrofit2.Response;
+import retrofit2.Retrofit;
 
-import io.choerodon.asgard.saga.annotation.Saga;
-import io.choerodon.asgard.saga.dto.StartInstanceDTO;
-import io.choerodon.asgard.saga.feign.SagaClient;
 import io.choerodon.base.domain.PageRequest;
 import io.choerodon.core.exception.CommonException;
-import io.choerodon.core.iam.ResourceLevel;
-import io.choerodon.devops.api.dto.ProjectDTO;
-import io.choerodon.devops.api.dto.gitlab.MemberDTO;
-import io.choerodon.devops.api.dto.iam.UserWithRoleDTO;
-import io.choerodon.devops.app.service.ApplicationInstanceService;
-import io.choerodon.devops.app.service.ApplicationService;
+import io.choerodon.devops.api.vo.RoleAssignmentSearchVO;
+import io.choerodon.devops.api.vo.kubernetes.CheckLog;
+import io.choerodon.devops.api.vo.kubernetes.ProjectCreateDTO;
 import io.choerodon.devops.app.service.DevopsCheckLogService;
-import io.choerodon.devops.app.service.DevopsEnvironmentService;
-import io.choerodon.devops.app.service.DevopsIngressService;
-import io.choerodon.devops.domain.application.entity.DevopsBranchE;
-import io.choerodon.devops.domain.application.entity.DevopsCheckLogE;
-import io.choerodon.devops.domain.application.entity.DevopsEnvApplicationE;
-import io.choerodon.devops.domain.application.entity.DevopsEnvCommandE;
-import io.choerodon.devops.domain.application.entity.DevopsEnvironmentE;
-import io.choerodon.devops.domain.application.entity.DevopsGitlabCommitE;
-import io.choerodon.devops.domain.application.entity.DevopsGitlabPipelineE;
-import io.choerodon.devops.domain.application.entity.DevopsProjectE;
-import io.choerodon.devops.domain.application.entity.ProjectE;
-import io.choerodon.devops.domain.application.entity.UserAttrE;
-import io.choerodon.devops.domain.application.entity.gitlab.GitlabJobE;
-import io.choerodon.devops.domain.application.entity.gitlab.GitlabMemberE;
-import io.choerodon.devops.domain.application.entity.gitlab.GitlabPipelineE;
-import io.choerodon.devops.domain.application.entity.gitlab.GitlabUserE;
-import io.choerodon.devops.domain.application.entity.iam.UserE;
-import io.choerodon.devops.domain.application.event.GitlabProjectPayload;
-import io.choerodon.devops.domain.application.event.IamAppPayLoad;
-import io.choerodon.devops.domain.application.repository.AppShareRepository;
-import io.choerodon.devops.domain.application.repository.ApplicationInstanceRepository;
-import io.choerodon.devops.domain.application.repository.ApplicationRepository;
-import io.choerodon.devops.domain.application.repository.ApplicationVersionRepository;
-import io.choerodon.devops.domain.application.repository.DevopsCheckLogRepository;
-import io.choerodon.devops.domain.application.repository.DevopsClusterRepository;
-import io.choerodon.devops.domain.application.repository.DevopsEnvApplicationRepostitory;
-import io.choerodon.devops.domain.application.repository.DevopsEnvCommandRepository;
-import io.choerodon.devops.domain.application.repository.DevopsEnvCommandValueRepository;
-import io.choerodon.devops.domain.application.repository.DevopsEnvResourceDetailRepository;
-import io.choerodon.devops.domain.application.repository.DevopsEnvResourceRepository;
-import io.choerodon.devops.domain.application.repository.DevopsEnvironmentRepository;
-import io.choerodon.devops.domain.application.repository.DevopsGitRepository;
-import io.choerodon.devops.domain.application.repository.DevopsGitlabCommitRepository;
-import io.choerodon.devops.domain.application.repository.DevopsGitlabPipelineRepository;
-import io.choerodon.devops.domain.application.repository.DevopsIngressRepository;
-import io.choerodon.devops.domain.application.repository.DevopsProjectConfigRepository;
-import io.choerodon.devops.domain.application.repository.DevopsProjectRepository;
-import io.choerodon.devops.domain.application.repository.DevopsServiceInstanceRepository;
-import io.choerodon.devops.domain.application.repository.DevopsServiceRepository;
-import io.choerodon.devops.domain.application.repository.GitlabGroupMemberRepository;
-import io.choerodon.devops.domain.application.repository.GitlabProjectRepository;
-import io.choerodon.devops.domain.application.repository.GitlabRepository;
-import io.choerodon.devops.domain.application.repository.GitlabUserRepository;
-import io.choerodon.devops.domain.application.repository.IamRepository;
-import io.choerodon.devops.domain.application.repository.OrgRepository;
-import io.choerodon.devops.domain.application.repository.UserAttrRepository;
-import io.choerodon.devops.domain.application.valueobject.CheckLog;
-import io.choerodon.devops.domain.application.valueobject.MenuCodeDTO;
-import io.choerodon.devops.domain.application.valueobject.Organization;
-import io.choerodon.devops.domain.application.valueobject.OrganizationSimplifyDTO;
-import io.choerodon.devops.domain.application.valueobject.ProjectCategoryEDTO;
-import io.choerodon.devops.domain.application.valueobject.ProjectCreateDTO;
-import io.choerodon.devops.domain.application.valueobject.ProjectHook;
-import io.choerodon.devops.domain.application.valueobject.Stage;
-import io.choerodon.devops.infra.common.util.EnvUtil;
-import io.choerodon.devops.infra.common.util.FileUtil;
-import io.choerodon.devops.infra.common.util.GitUtil;
-import io.choerodon.devops.infra.common.util.K8sUtil;
-import io.choerodon.devops.infra.common.util.SkipNullRepresenterUtil;
-import io.choerodon.devops.infra.common.util.TypeUtil;
-import io.choerodon.devops.infra.common.util.enums.ResourceType;
-import io.choerodon.devops.infra.config.RetrofitHandler;
-import io.choerodon.devops.infra.dataobject.ApplicationDO;
-import io.choerodon.devops.infra.dataobject.ApplicationVersionDO;
-import io.choerodon.devops.infra.dataobject.DevopsEnvPodDO;
-import io.choerodon.devops.infra.dataobject.DevopsGitlabCommitDO;
-import io.choerodon.devops.infra.dataobject.DevopsGitlabPipelineDO;
-import io.choerodon.devops.infra.dataobject.DevopsProjectDO;
-import io.choerodon.devops.infra.dataobject.gitlab.BranchDO;
-import io.choerodon.devops.infra.dataobject.gitlab.CommitDO;
-import io.choerodon.devops.infra.dataobject.gitlab.CommitStatuseDO;
-import io.choerodon.devops.infra.dataobject.gitlab.GroupDO;
-import io.choerodon.devops.infra.feign.GitlabServiceClient;
-import io.choerodon.devops.infra.feign.SonarClient;
-import io.choerodon.devops.infra.mapper.ApplicationMapper;
-import io.choerodon.devops.infra.mapper.ApplicationVersionMapper;
-import io.choerodon.devops.infra.mapper.DevopsEnvPodMapper;
-import io.choerodon.devops.infra.mapper.DevopsEnvironmentMapper;
-import io.choerodon.devops.infra.mapper.DevopsGitlabCommitMapper;
-import io.choerodon.devops.infra.mapper.DevopsGitlabPipelineMapper;
-import io.choerodon.devops.infra.mapper.DevopsProjectMapper;
+import io.choerodon.devops.app.service.DevopsProjectService;
+import io.choerodon.devops.infra.config.ConfigurationProperties;
+import io.choerodon.devops.infra.config.HarborConfigurationProperties;
+import io.choerodon.devops.infra.dto.*;
+import io.choerodon.devops.infra.dto.harbor.*;
+import io.choerodon.devops.infra.dto.iam.IamUserDTO;
+import io.choerodon.devops.infra.dto.iam.OrganizationDTO;
+import io.choerodon.devops.infra.dto.iam.ProjectDTO;
+import io.choerodon.devops.infra.feign.BaseServiceClient;
+import io.choerodon.devops.infra.feign.HarborClient;
+import io.choerodon.devops.infra.feign.operator.BaseServiceClientOperator;
+import io.choerodon.devops.infra.handler.RetrofitHandler;
+import io.choerodon.devops.infra.mapper.*;
 
 
 @Service
 public class DevopsCheckLogServiceImpl implements DevopsCheckLogService {
 
-    private static final String SONAR = "sonar";
-    private static final String SONARQUBE = "sonarqube";
-    private static final String TWELVE_VERSION = "0.12.0";
-    private static final String APP = "app: ";
-    private static final Integer ADMIN = 1;
-    private static final String ENV = "ENV";
-    private static final String SERVICE_LABEL = "choerodon.io/network";
-    private static final String PROJECT_OWNER = "role/project/default/project-owner";
-    private static final String SERVICE = "service";
-    private static final String SUCCESS = "success";
-    private static final String FAILED = "failed: ";
-    private static final String SERIAL_STRING = " serializable to yaml";
-    private static final String APPLICATION = "application";
-    private static final String FILE_SEPARATOR = "file.separator";
-    private static final String PERMISSION = "permission";
-    private static final String YAML_SUFFIX = ".yaml";
     private static final Logger LOGGER = LoggerFactory.getLogger(DevopsCheckLogServiceImpl.class);
+    private static final String SUCCESS = "success";
+    private static final String FAILED = "failed";
     private static final ExecutorService executorService = new ThreadPoolExecutor(0, 1,
             0L, TimeUnit.MILLISECONDS,
             new LinkedBlockingQueue<>(), new UtilityElf.DefaultThreadFactory("devops-upgrade", false));
-    private static final String SERVICE_PATTERN = "[a-zA-Z0-9_\\.][a-zA-Z0-9_\\-\\.]*[a-zA-Z0-9_\\-]|[a-zA-Z0-9_]";
-    private static io.kubernetes.client.JSON json = new io.kubernetes.client.JSON();
-    @Value("${services.sonarqube.url:}")
-    private String sonarqubeUrl;
-    @Value("${services.sonarqube.username:}")
-    private String userName;
-    @Value("${services.sonarqube.password:}")
-    private String password;
-    private Gson gson = new Gson();
-    @Value("${services.gateway.url}")
-    private String gatewayUrl;
-    @Value("${services.helm.url}")
-    private String helmUrl;
 
     @Autowired
-    private ApplicationMapper applicationMapper;
+    private AppServiceVersionMapper appServiceVersionMapper;
+    @Autowired
+    private DevopsCheckLogMapper devopsCheckLogMapper;
+    @Autowired
+    private DevopsClusterMapper devopsClusterMapper;
+    @Autowired
+    private AppServiceShareRuleMapper applicationShareMapper;
+    @Autowired
+    private AppServiceInstanceMapper appServiceInstanceMapper;
+    @Autowired
+    private DevopsEnvAppServiceMapper devopsEnvAppServiceMapper;
+    @Autowired
+    private DevopsEnvCommandMapper devopsEnvCommandMapper;
+    @Autowired
+    private PipelineRecordMapper pipelineRecordMapper;
+    @Autowired
+    private BaseServiceClientOperator baseServiceClientOperator;
+    @Autowired
+    private DevopsConfigMapper devopsConfigMapper;
+    @Autowired
+    private AppServiceMapper appServiceMapper;
+    @Autowired
+    private DevopsCertificationMapper devopsCertificationMapper;
+    @Autowired
+    private DevopsBranchMapper devopsBranchMapper;
     @Autowired
     private DevopsEnvironmentMapper devopsEnvironmentMapper;
     @Autowired
-    private GitlabRepository gitlabRepository;
+    private DevopsDeployRecordMapper devopsDeployRecordMapper;
     @Autowired
-    private OrgRepository orgRepository;
+    private HarborConfigurationProperties harborConfigurationProperties;
     @Autowired
-    private UserAttrRepository userAttrRepository;
+    private BaseServiceClient baseServiceClient;
     @Autowired
-    private DevopsCheckLogRepository devopsCheckLogRepository;
-    @Autowired
-    private GitlabServiceClient gitlabServiceClient;
-    @Autowired
-    private DevopsGitRepository devopsGitRepository;
-    @Autowired
-    private IamRepository iamRepository;
-    @Autowired
-    private DevopsProjectRepository devopsProjectRepository;
-    @Autowired
-    private DevopsEnvironmentRepository devopsEnvironmentRepository;
-    @Autowired
-    private DevopsEnvironmentService devopsEnvironmentService;
-    @Autowired
-    private ApplicationInstanceRepository applicationInstanceRepository;
-    @Autowired
-    private ApplicationVersionRepository applicationVersionRepository;
-    @Autowired
-    private ApplicationRepository applicationRepository;
-    @Autowired
-    private ApplicationInstanceService applicationInstanceService;
-    @Autowired
-    private DevopsServiceRepository devopsServiceRepository;
-    @Autowired
-    private DevopsIngressRepository devopsIngressRepository;
-    @Autowired
-    private DevopsIngressService devopsIngressService;
-    @Autowired
-    private SagaClient sagaClient;
-    @Autowired
-    private DevopsEnvResourceDetailRepository devopsEnvResourceDetailRepository;
-    @Autowired
-    private DevopsEnvResourceRepository devopsEnvResourceRepository;
-    @Autowired
-    private DevopsServiceInstanceRepository devopsServiceInstanceRepository;
-    @Autowired
-    private GitlabProjectRepository gitlabProjectRepository;
-    @Autowired
-    private DevopsGitlabCommitRepository devopsGitlabCommitRepository;
-    @Autowired
-    private DevopsGitlabPipelineRepository devopsGitlabPipelineRepository;
-    @Autowired
-    private DevopsGitlabPipelineMapper devopsGitlabPipelineMapper;
-    @Autowired
-    private DevopsGitlabCommitMapper devopsGitlabCommitMapper;
-    @Autowired
-    private DevopsProjectMapper devopsProjectMapper;
-    @Autowired
-    private GitlabGroupMemberRepository gitlabGroupMemberRepository;
-    @Autowired
-    private GitlabUserRepository gitlabUserRepository;
-    @Autowired
-    private DevopsEnvPodMapper devopsEnvPodMapper;
-    @Autowired
-    private DevopsClusterRepository clusterRepository;
-    @Autowired
-    private GitUtil gitUtil;
-    @Autowired
-    private EnvUtil envUtil;
-    @Autowired
-    private ApplicationVersionMapper applicationVersionMapper;
-    @Autowired
-    private DevopsProjectConfigRepository devopsProjectConfigRepository;
-    @Autowired
-    private ApplicationService applicationService;
-    @Autowired
-    private DevopsEnvCommandRepository devopsEnvCommandRepository;
-    @Autowired
-    private DevopsEnvCommandValueRepository devopsEnvCommandValueRepository;
-    @Autowired
-    private DevopsEnvApplicationRepostitory devopsEnvApplicationRepostitory;
-    @Autowired
-    private AppShareRepository appShareRepository;
+    private DevopsProjectService devopsProjectService;
 
     @Override
     public void checkLog(String version) {
         LOGGER.info("start upgrade task");
-        executorService.submit(new UpgradeTask(version));
-    }
-
-
-    private void createGitFile(String repoPath, Git git, String relativePath, String content) {
-        GitUtil newGitUtil = new GitUtil();
-        try {
-            newGitUtil.createFileInRepo(repoPath, git, relativePath, content, null);
-        } catch (IOException e) {
-            LOGGER.info("error.file.open: " + relativePath, e);
-        } catch (GitAPIException e) {
-            LOGGER.info("error.git.commit: " + relativePath, e);
-        }
+        executorService.execute(new UpgradeTask(version));
 
     }
-
-    private String getObjectYaml(Object object) {
-        Tag tag = new Tag(object.getClass().toString());
-        SkipNullRepresenterUtil skipNullRepresenter = new SkipNullRepresenterUtil();
-        skipNullRepresenter.addClassTag(object.getClass(), tag);
-        DumperOptions options = new DumperOptions();
-        options.setDefaultFlowStyle(DumperOptions.FlowStyle.BLOCK);
-        options.setAllowReadOnlyProperties(true);
-        Yaml yaml = new Yaml(skipNullRepresenter, options);
-        return yaml.dump(object).replace("!<" + tag.getValue() + ">", "---");
-    }
-
-
-    private void updateWebHook(List<CheckLog> logs) {
-        List<ApplicationDO> applications = applicationMapper.selectAll();
-        applications.stream()
-                .filter(applicationDO ->
-                        applicationDO.getHookId() != null)
-                .forEach(applicationDO -> {
-                    CheckLog checkLog = new CheckLog();
-                    checkLog.setContent(APP + applicationDO.getName() + "update gitlab webhook");
-                    try {
-                        gitlabRepository.updateWebHook(applicationDO.getGitlabProjectId(), TypeUtil.objToInteger(applicationDO.getHookId()), ADMIN);
-                        checkLog.setResult(SUCCESS);
-                    } catch (Exception e) {
-                        checkLog.setResult(FAILED + e.getMessage());
-                    }
-                    logs.add(checkLog);
-                });
-    }
-
-    private void syncCommit(List<CheckLog> logs) {
-        List<ApplicationDO> applications = applicationMapper.selectAll();
-        applications.stream().filter(applicationDO -> applicationDO.getGitlabProjectId() != null)
-                .forEach(applicationDO -> {
-                            CheckLog checkLog = new CheckLog();
-                            checkLog.setContent(APP + applicationDO.getName() + "sync gitlab commit");
-                            try {
-                                List<CommitDO> commitDOS = gitlabProjectRepository.listCommits(applicationDO.getGitlabProjectId(), ADMIN, 1, 100);
-                                commitDOS.forEach(commitDO -> {
-                                    DevopsGitlabCommitE devopsGitlabCommitE = new DevopsGitlabCommitE();
-                                    devopsGitlabCommitE.setAppId(applicationDO.getId());
-                                    devopsGitlabCommitE.setCommitContent(commitDO.getMessage());
-                                    devopsGitlabCommitE.setCommitSha(commitDO.getId());
-                                    devopsGitlabCommitE.setUrl(commitDO.getUrl());
-                                    if ("root".equals(commitDO.getAuthorName())) {
-                                        devopsGitlabCommitE.setUserId(1L);
-                                    } else {
-                                        UserE userE = iamRepository.queryByEmail(applicationDO.getProjectId(),
-                                                commitDO.getAuthorEmail());
-                                        if (userE != null) {
-                                            devopsGitlabCommitE.setUserId(userE.getId());
-                                        }
-                                    }
-                                    devopsGitlabCommitE.setCommitDate(commitDO.getCommittedDate());
-                                    devopsGitlabCommitRepository.create(devopsGitlabCommitE);
-
-                                });
-                                logs.add(checkLog);
-
-                            } catch (Exception e) {
-                                checkLog.setResult(FAILED + e.getMessage());
-                            }
-                        }
-                );
-    }
-
-
-    private void syncPipelines(List<CheckLog> logs) {
-        List<ApplicationDO> applications = applicationMapper.selectAll();
-        applications.stream().filter(applicationDO -> applicationDO.getGitlabProjectId() != null)
-                .forEach(applicationDO -> {
-                    CheckLog checkLog = new CheckLog();
-                    checkLog.setContent(APP + applicationDO.getName() + "sync gitlab pipeline");
-                    try {
-                        List<GitlabPipelineE> pipelineDOS = gitlabProjectRepository
-                                .listPipeline(applicationDO.getGitlabProjectId(), ADMIN);
-                        pipelineDOS.forEach(pipelineE -> {
-                            GitlabPipelineE gitlabPipelineE = gitlabProjectRepository
-                                    .getPipeline(applicationDO.getGitlabProjectId(), pipelineE.getId(), ADMIN);
-                            DevopsGitlabPipelineE devopsGitlabPipelineE = new DevopsGitlabPipelineE();
-                            devopsGitlabPipelineE.setAppId(applicationDO.getId());
-                            Long userId = userAttrRepository
-                                    .queryUserIdByGitlabUserId(TypeUtil.objToLong(gitlabPipelineE.getUser()
-                                            .getId()));
-                            devopsGitlabPipelineE.setPipelineCreateUserId(userId);
-                            devopsGitlabPipelineE.setPipelineId(TypeUtil.objToLong(gitlabPipelineE.getId()));
-                            if (gitlabPipelineE.getStatus().toString().equals(SUCCESS)) {
-                                devopsGitlabPipelineE.setStatus("passed");
-                            } else {
-                                devopsGitlabPipelineE.setStatus(gitlabPipelineE.getStatus().toString());
-                            }
-                            try {
-                                devopsGitlabPipelineE
-                                        .setPipelineCreationDate(new SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
-                                                .parse(gitlabPipelineE.getCreatedAt()));
-                            } catch (ParseException e) {
-                                checkLog.setResult(FAILED + e.getMessage());
-                            }
-                            DevopsGitlabCommitE devopsGitlabCommitE = devopsGitlabCommitRepository
-                                    .queryByShaAndRef(gitlabPipelineE.getSha(), gitlabPipelineE.getRef());
-                            if (devopsGitlabCommitE != null) {
-                                devopsGitlabCommitE.setRef(gitlabPipelineE.getRef());
-                                devopsGitlabCommitRepository.update(devopsGitlabCommitE);
-                                devopsGitlabPipelineE.initDevopsGitlabCommitEById(devopsGitlabCommitE.getId());
-                            }
-                            List<Stage> stages = new ArrayList<>();
-                            List<String> stageNames = new ArrayList<>();
-                            List<Integer> gitlabJobIds = gitlabProjectRepository
-                                    .listJobs(applicationDO.getGitlabProjectId(),
-                                            TypeUtil.objToInteger(devopsGitlabPipelineE.getPipelineId()), ADMIN)
-                                    .stream().map(GitlabJobE::getId).collect(Collectors.toList());
-
-                            gitlabProjectRepository
-                                    .getCommitStatus(applicationDO.getGitlabProjectId(), gitlabPipelineE.getSha(),
-                                            ADMIN)
-                                    .forEach(commitStatuseDO -> {
-                                        if (gitlabJobIds.contains(commitStatuseDO.getId())) {
-                                            Stage stage = getPipelineStage(commitStatuseDO);
-                                            stages.add(stage);
-                                        } else if (commitStatuseDO.getName().equals(SONARQUBE) && !stageNames
-                                                .contains(SONARQUBE) && !stages.isEmpty()) {
-                                            Stage stage = getPipelineStage(commitStatuseDO);
-                                            stages.add(stage);
-                                            stageNames.add(commitStatuseDO.getName());
-                                        }
-                                    });
-                            devopsGitlabPipelineE.setStage(JSONArray.toJSONString(stages));
-                            devopsGitlabPipelineRepository.create(devopsGitlabPipelineE);
-                        });
-                    } catch (Exception e) {
-                        checkLog.setResult(FAILED + e.getMessage());
-                    }
-                    logs.add(checkLog);
-                });
-        devopsGitlabPipelineRepository.deleteWithoutCommit();
-    }
-
-    private void fixPipelines(List<CheckLog> logs) {
-        List<DevopsGitlabPipelineDO> gitlabPipelineES = devopsGitlabPipelineMapper.selectAll();
-        gitlabPipelineES.forEach(devopsGitlabPipelineDO -> {
-            CheckLog checkLog = new CheckLog();
-            checkLog.setContent(APP + devopsGitlabPipelineDO.getPipelineId() + "fix pipeline");
-            try {
-                ApplicationDO applicationDO = applicationMapper.selectByPrimaryKey(devopsGitlabPipelineDO.getAppId());
-                if (applicationDO.getGitlabProjectId() != null) {
-                    DevopsGitlabCommitDO devopsGitlabCommitDO = devopsGitlabCommitMapper
-                            .selectByPrimaryKey(devopsGitlabPipelineDO.getCommitId());
-                    if (devopsGitlabCommitDO != null) {
-                        GitlabPipelineE gitlabPipelineE = gitlabProjectRepository
-                                .getPipeline(applicationDO.getGitlabProjectId(),
-                                        TypeUtil.objToInteger(devopsGitlabPipelineDO.getPipelineId()), ADMIN);
-                        List<Stage> stages = new ArrayList<>();
-                        List<String> stageNames = new ArrayList<>();
-                        List<Integer> gitlabJobIds = gitlabProjectRepository
-                                .listJobs(applicationDO.getGitlabProjectId(),
-                                        TypeUtil.objToInteger(devopsGitlabPipelineDO.getPipelineId()),
-                                        ADMIN).stream().map(GitlabJobE::getId).collect(Collectors.toList());
-
-                        gitlabProjectRepository.getCommitStatus(applicationDO.getGitlabProjectId(),
-                                devopsGitlabCommitDO.getCommitSha(), ADMIN)
-                                .forEach(commitStatuseDO -> {
-                                    if (gitlabJobIds.contains(commitStatuseDO.getId())) {
-                                        Stage stage = getPipelineStage(commitStatuseDO);
-                                        stages.add(stage);
-                                    } else if (commitStatuseDO.getName().equals(SONARQUBE) && !stageNames
-                                            .contains(SONARQUBE) && !stages.isEmpty()) {
-                                        Stage stage = getPipelineStage(commitStatuseDO);
-                                        stages.add(stage);
-                                        stageNames.add(commitStatuseDO.getName());
-                                    }
-                                });
-                        devopsGitlabPipelineDO.setStatus(gitlabPipelineE.getStatus().toString());
-                        devopsGitlabPipelineDO.setStage(JSONArray.toJSONString(stages));
-                        devopsGitlabPipelineMapper.updateByPrimaryKeySelective(devopsGitlabPipelineDO);
-                    }
-                }
-                checkLog.setResult(SUCCESS);
-            } catch (Exception e) {
-                checkLog.setResult(FAILED + e.getMessage());
-            }
-            logs.add(checkLog);
-        });
-
-    }
-
-    private Stage getPipelineStage(CommitStatuseDO commitStatuseDO) {
-        Stage stage = new Stage();
-        stage.setDescription(commitStatuseDO.getDescription());
-        stage.setId(commitStatuseDO.getId());
-        stage.setName(commitStatuseDO.getName());
-        stage.setStatus(commitStatuseDO.getStatus());
-        if (commitStatuseDO.getFinishedAt() != null) {
-            stage.setFinishedAt(commitStatuseDO.getFinishedAt());
-        }
-        if (commitStatuseDO.getStartedAt() != null) {
-            stage.setStartedAt(commitStatuseDO.getStartedAt());
-        }
-        return stage;
-    }
-
-
-    private void syncCommandId() {
-        devopsCheckLogRepository.syncCommandId();
-    }
-
-    private void syncCommandVersionId() {
-        devopsCheckLogRepository.syncCommandVersionId();
-    }
-
-    private void syncGitOpsUserAccess(List<CheckLog> logs, String version) {
-        List<Long> projectIds = devopsProjectMapper.selectAll().stream().
-                filter(devopsProjectDO -> devopsProjectDO.getDevopsEnvGroupId() != null && devopsProjectDO
-                        .getDevopsAppGroupId() != null).map(DevopsProjectDO::getIamProjectId)
-                .collect(Collectors.toList());
-        projectIds.forEach(projectId -> {
-            PageInfo<UserWithRoleDTO> allProjectUser = iamRepository
-                    .queryUserPermissionByProjectId(projectId, new PageRequest(0,0), false);
-            if (!allProjectUser.getList().isEmpty()) {
-                allProjectUser.getList().forEach(userWithRoleDTO -> {
-                    // 如果是项目成员
-                    if (userWithRoleDTO.getRoles().stream().noneMatch(roleDTO -> roleDTO.getCode().equals(PROJECT_OWNER))) {
-                        CheckLog checkLog = new CheckLog();
-                        checkLog.setContent(userWithRoleDTO.getLoginName() + ": remove env permission");
-                        try {
-                            UserAttrE userAttrE = userAttrRepository.queryById(userWithRoleDTO.getId());
-                            if (userAttrE != null) {
-                                Integer gitlabUserId = TypeUtil.objToInteger(userAttrE.getGitlabUserId());
-                                DevopsProjectE devopsProjectE = devopsProjectRepository.queryDevopsProject(projectId);
-                                GitlabMemberE envgroupMemberE = gitlabGroupMemberRepository.getUserMemberByUserId(
-                                        TypeUtil.objToInteger(devopsProjectE.getDevopsEnvGroupId()), gitlabUserId);
-                                GitlabMemberE appgroupMemberE = gitlabGroupMemberRepository.getUserMemberByUserId(
-                                        TypeUtil.objToInteger(devopsProjectE.getDevopsAppGroupId()), gitlabUserId);
-                                if (version.equals(TWELVE_VERSION)) {
-                                    if (appgroupMemberE != null && appgroupMemberE.getId() != null) {
-                                        gitlabGroupMemberRepository.deleteMember(
-                                                TypeUtil.objToInteger(devopsProjectE.getDevopsAppGroupId()), gitlabUserId);
-                                    }
-                                } else {
-                                    if (envgroupMemberE != null && envgroupMemberE.getId() != null) {
-                                        gitlabGroupMemberRepository.deleteMember(
-                                                TypeUtil.objToInteger(devopsProjectE.getDevopsEnvGroupId()), gitlabUserId);
-                                    }
-                                }
-                            }
-                            checkLog.setResult(SUCCESS);
-                            LOGGER.info(SUCCESS);
-                        } catch (Exception e) {
-                            LOGGER.info(FAILED + e.getMessage());
-                            checkLog.setResult(FAILED + e.getMessage());
-                        }
-                        logs.add(checkLog);
-                    }
-                });
-            }
-        });
-    }
-
-    private void syncGitlabUserName(List<CheckLog> logs) {
-        userAttrRepository.list().stream().filter(userAttrE -> userAttrE.getGitlabUserId() != null).forEach(userAttrE ->
-                {
-                    CheckLog checkLog = new CheckLog();
-                    try {
-                        UserE userE = iamRepository.queryUserByUserId(userAttrE.getIamUserId());
-                        if (Pattern.matches(SERVICE_PATTERN, userE.getLoginName())) {
-                            userAttrE.setGitlabUserName(userE.getLoginName());
-                            if (userE.getLoginName().equals("admin") || userE.getLoginName().equals("admin1")) {
-                                userAttrE.setGitlabUserName("root");
-                            }
-                        } else {
-                            GitlabUserE gitlabUserE = gitlabUserRepository.getGitlabUserByUserId(TypeUtil.objToInteger(userAttrE.getGitlabUserId()));
-                            userAttrE.setGitlabUserName(gitlabUserE.getUsername());
-                        }
-                        userAttrRepository.update(userAttrE);
-                        LOGGER.info(SUCCESS);
-                        checkLog.setResult(SUCCESS);
-                        checkLog.setContent(userAttrE.getGitlabUserId() + " : init Name Succeed");
-                    } catch (Exception e) {
-                        LOGGER.info(e.getMessage());
-                        checkLog.setResult(FAILED);
-                        checkLog.setContent(userAttrE.getGitlabUserId() + " : init Name Failed");
-                    }
-                    logs.add(checkLog);
-                }
-        );
-    }
-
 
     class UpgradeTask implements Runnable {
         private String version;
@@ -566,7 +106,6 @@ public class DevopsCheckLogServiceImpl implements DevopsCheckLogService {
             this.version = version;
         }
 
-
         UpgradeTask(String version, Long env) {
             this.version = version;
             this.env = env;
@@ -574,426 +113,427 @@ public class DevopsCheckLogServiceImpl implements DevopsCheckLogService {
 
         @Override
         public void run() {
-            DevopsCheckLogE devopsCheckLogE = new DevopsCheckLogE();
-            List<CheckLog> logs = new ArrayList<>();
-            devopsCheckLogE.setBeginCheckDate(new Date());
-            if ("0.8".equals(version)) {
-                LOGGER.info("Start to execute upgrade task 0.8");
-                List<ApplicationDO> applications = applicationMapper.selectAll();
-                applications.stream()
-                        .filter(applicationDO ->
-                                applicationDO.getGitlabProjectId() != null && applicationDO.getHookId() == null)
-                        .forEach(applicationDO -> syncWebHook(applicationDO, logs));
-                applications.stream()
-                        .filter(applicationDO ->
-                                applicationDO.getGitlabProjectId() != null)
-                        .forEach(applicationDO -> syncBranches(applicationDO, logs));
-            } else if ("0.9".equals(version)) {
-                LOGGER.info("Start to execute upgrade task 0.9");
-                syncNonEnvGroupProject(logs);
-                gitOpsUserAccess();
-                syncEnvProject(logs);
-            } else if ("0.10.0".equals(version)) {
-                LOGGER.info("Start to execute upgrade task 1.0");
-                updateWebHook(logs);
-                syncCommit(logs);
-                syncPipelines(logs);
-            } else if ("0.10.4".equals(version)) {
-                fixPipelines(logs);
-            } else if ("0.11.0".equals(version)) {
-                syncGitOpsUserAccess(logs, "0.11.0");
-                updateWebHook(logs);
-            } else if (TWELVE_VERSION.equals(version)) {
-                syncGitOpsUserAccess(logs, TWELVE_VERSION);
-                syncGitlabUserName(logs);
-            } else if ("0.11.2".equals(version)) {
-                syncCommandId();
-                syncCommandVersionId();
-            } else if ("0.14.0".equals(version)) {
-                syncDevopsEnvPodNodeNameAndRestartCount();
-            } else if ("0.15.0".equals(version)) {
-                syncAppToIam();
-                syncAppVersion();
-                syncCiVariableAndRole(logs);
-            } else if ("0.17.0".equals(version)) {
-                syncSonarProject(logs);
-            } else if ("0.18.0".equals(version)) {
-                syncDeployValues(logs);
-            } else if ("0.19.0".equals(version)) {
-                syncEnvAppRelevance(logs);
-//                syncClusters(logs);
-                syncAppShare();
-            } else {
-                LOGGER.info("version not matched");
+            try {
+                DevopsCheckLogDTO devopsCheckLogDTO = new DevopsCheckLogDTO();
+                List<CheckLog> logs = new ArrayList<>();
+                devopsCheckLogDTO.setBeginCheckDate(new Date());
+                if ("0.19.0".equals(version)) {
+                    syncEnvAppRelevance(logs);
+                    // 0.20.0删除此方法
+//                    syncAppShare(logs);
+                    syncDeployRecord(logs);
+                    syncClusterAndCertifications(logs);
+                    syncConfig();
+                    syncEnvAndAppServiceStatus();
+                    syncBranch();
+                    LOGGER.info("修复数据完成");
+                } else if ("0.18.13".equals(version)) {
+                    syncHarbor();
+                } else {
+                    LOGGER.info("version not matched");
+                }
+
+                devopsCheckLogDTO.setLog(JSON.toJSONString(logs));
+                devopsCheckLogDTO.setEndCheckDate(new Date());
+
+                devopsCheckLogMapper.insert(devopsCheckLogDTO);
+            } catch (Throwable ex) {
+                LOGGER.warn("Exception occurred when applying data migration. The ex is: {}", ex);
             }
-            devopsCheckLogE.setLog(JSON.toJSONString(logs));
-            devopsCheckLogE.setEndCheckDate(new Date());
-            devopsCheckLogRepository.create(devopsCheckLogE);
         }
 
-        /**
-         * 为devops_env_pod表的遗留数据的新增的node_name和restart_count字段同步数据
-         */
-        private void syncDevopsEnvPodNodeNameAndRestartCount() {
-            List<DevopsEnvPodDO> pods = devopsEnvPodMapper.selectAll();
-            pods.forEach(pod -> {
-                try {
-                    if (StringUtils.isEmpty(pod.getNodeName())) {
-                        String message = devopsEnvResourceRepository.getResourceDetailByNameAndTypeAndInstanceId(pod.getAppInstanceId(), pod.getName(), ResourceType.POD);
-                        V1Pod v1Pod = json.deserialize(message, V1Pod.class);
-                        pod.setNodeName(v1Pod.getSpec().getNodeName());
-                        pod.setRestartCount(K8sUtil.getRestartCountForPod(v1Pod));
-                        devopsEnvPodMapper.updateByPrimaryKey(pod);
-                    }
-                } catch (Exception e) {
-                    LOGGER.warn("Processing node name and restart count for pod with name {} failed. \n exception is: {}", pod.getName(), e);
-                }
-            });
+
+        private void syncBranch() {
+            LOGGER.info("Start syncing branches.");
+            //删除状态为已删除的分支
+            devopsBranchMapper.deleteByIsDelete();
+            //删除重复的分支
+            devopsBranchMapper.deleteDuplicateBranch();
+            LOGGER.info("End syncing branches.");
+
         }
 
-        /**
-         * 同步devops应用表数据到iam应用表数据
-         */
-        @Saga(code = "devops-sync-application",
-                description = "Devops同步应用到iam", inputSchema = "{}")
-        private void syncAppToIam() {
-            List<ApplicationDO> applicationDOS = applicationMapper.selectAll().stream().filter(applicationDO -> applicationDO.getGitlabProjectId() != null).collect(Collectors.toList());
-            List<IamAppPayLoad> iamAppPayLoads = applicationDOS.stream().map(applicationDO -> {
-                ProjectE projectE = iamRepository.queryIamProject(applicationDO.getProjectId());
-                Organization organization = iamRepository.queryOrganizationById(projectE.getOrganization().getId());
-                IamAppPayLoad iamAppPayLoad = new IamAppPayLoad();
-                iamAppPayLoad.setOrganizationId(organization.getId());
-                iamAppPayLoad.setApplicationCategory(APPLICATION);
-                iamAppPayLoad.setApplicationType(applicationDO.getType());
-                iamAppPayLoad.setCode(applicationDO.getCode());
-                iamAppPayLoad.setName(applicationDO.getName());
-                iamAppPayLoad.setEnabled(true);
-                iamAppPayLoad.setProjectId(applicationDO.getProjectId());
-                return iamAppPayLoad;
+        private void syncConfig() {
 
-            }).collect(Collectors.toList());
-            String input = JSONArray.toJSONString(iamAppPayLoads);
-            sagaClient.startSaga("devops-sync-application", new StartInstanceDTO(input, "", "", "", null));
-        }
+            LOGGER.info("sync config begin!!!");
 
-        private void syncCiVariableAndRole(List<CheckLog> logs) {
-            List<Integer> gitlabProjectIds = applicationMapper.selectAll().stream()
-                    .filter(applicationDO -> applicationDO.getGitlabProjectId() != null)
-                    .map(ApplicationDO::getGitlabProjectId).collect(Collectors.toList());
-            //changRole
-            gitlabProjectIds.forEach(t -> {
-                CheckLog checkLog = new CheckLog();
-                try {
-                    checkLog.setContent("gitlabProjectId: " + t + " sync gitlab variable and role");
-                    List<MemberDTO> memberDTOS = gitlabProjectRepository.getAllMemberByProjectId(t).stream().filter(m -> m.getAccessLevel() == 40).map(memberE ->
-                            new MemberDTO(memberE.getId(), 30)).collect(Collectors.toList());
-                    if (!memberDTOS.isEmpty()) {
-                        gitlabRepository.updateMemberIntoProject(t, memberDTOS);
-                    }
-                    LOGGER.info("update project member maintainer to developer success");
-                    checkLog.setResult(SUCCESS);
-                } catch (Exception e) {
-                    LOGGER.info("gitlab.project.is.not.exist,gitlabProjectId: " + t, e);
-                    checkLog.setResult(FAILED + e.getMessage());
-                }
-                LOGGER.info(checkLog.toString());
-                logs.add(checkLog);
-            });
-        }
-
-        private void syncDeployValues(List<CheckLog> logs) {
-            applicationInstanceRepository.list().stream().filter(applicationInstanceE -> applicationInstanceE.getCommandId() != null).forEach(applicationInstanceE ->
-                    {
-                        CheckLog checkLog = new CheckLog();
-                        checkLog.setContent(String.format("Sync instance deploy value of %s", applicationInstanceE.getCode()));
-                        LOGGER.info("Sync instance deploy value of {}", applicationInstanceE.getCode());
-                        try {
-                            DevopsEnvCommandE devopsEnvCommandE = devopsEnvCommandRepository.query(applicationInstanceE.getCommandId());
-                            String versionValue = applicationVersionRepository.queryValue(devopsEnvCommandE.getObjectVersionId());
-                            String deployValue = applicationInstanceRepository.queryValueByInstanceId(applicationInstanceE.getId());
-                            devopsEnvCommandValueRepository.updateValueById(devopsEnvCommandE.getDevopsEnvCommandValueE().getId(), applicationInstanceService.getReplaceResult(versionValue, deployValue).getYaml());
-                            checkLog.setResult("success");
-                        } catch (Exception e) {
-                            checkLog.setResult("fail");
-                            LOGGER.info(e.getMessage(), e);
+            //避免2次修复数据
+            List<DevopsConfigDTO> configs = devopsConfigMapper.existAppServiceConfig();
+            if (configs.isEmpty()) {
+                DevopsConfigDTO harborDefault = devopsConfigMapper.queryByNameWithNoProject("harbor_default");
+                DevopsConfigDTO chartDefault = devopsConfigMapper.queryByNameWithNoProject("chart_default");
+                List<DevopsConfigDTO> addHarborConfigs = new ArrayList<>();
+                List<DevopsConfigDTO> addChartConfigs = new ArrayList<>();
+                appServiceMapper.selectAll().forEach(appServiceDTO -> {
+                    if (appServiceDTO.getHarborConfigId() != null && !appServiceDTO.getHarborConfigId().equals(harborDefault.getId())) {
+                        DevopsConfigDTO devopsConfigDTO = devopsConfigMapper.selectByPrimaryKey(appServiceDTO.getHarborConfigId());
+                        if (devopsConfigDTO == null) {
+                            appServiceMapper.updateHarborConfigNullByServiceId(appServiceDTO.getId());
+                        } else {
+                            devopsConfigDTO.setId(null);
+                            devopsConfigDTO.setProjectId(null);
+                            devopsConfigDTO.setAppServiceId(appServiceDTO.getId());
+                            addHarborConfigs.add(devopsConfigDTO);
                         }
-                        logs.add(checkLog);
                     }
-            );
-        }
-
-        private void syncClusters(List<CheckLog> logs) {
-            PageInfo<OrganizationSimplifyDTO> organizations = iamRepository.getAllOrgs(0, 0);
-            organizations.getList().forEach(org -> {
-                CheckLog checkLog = new CheckLog();
-                checkLog.setContent(String.format("Sync organization cluster to project,organizationId: %s", org.getId()));
-                LOGGER.info("Sync organization cluster to project,organizationId: {}", org.getId());
-                try {
-                    Long categoryId = 1L;
-                    ProjectDTO projectDTO = createOpsProject(org.getId(), categoryId);
-                    clusterRepository.updateProjectId(org.getId(), projectDTO.getId());
-                    checkLog.setResult("success");
-                } catch (Exception e) {
-                    checkLog.setResult("fail");
-                    LOGGER.info(e.getMessage(), e);
-                }
-                logs.add(checkLog);
-            });
-        }
-
-        private void syncEnvAppRelevance(List<CheckLog> logs) {
-            List<DevopsEnvApplicationE> envApplicationES = applicationInstanceRepository.listAllEnvApp();
-
-            envApplicationES.stream().distinct().forEach(v -> {
-                CheckLog checkLog = new CheckLog();
-                checkLog.setContent(String.format(
-                        "Sync environment application relationship,envId: %s, appId: %s", v.getEnvId(), v.getAppId()));
-                try {
-                    devopsEnvApplicationRepostitory.create(v);
-                    checkLog.setResult("success");
-                } catch (Exception e) {
-                    checkLog.setResult("fail");
-                    LOGGER.info(e.getMessage(), e);
-                }
-                logs.add(checkLog);
-            });
-        }
-
-        private void syncAppShare() {
-            LOGGER.info("update publish level to organization.");
-            appShareRepository.updatePublishLevel();
-            LOGGER.info("update publish level success.");
-            LOGGER.info("update publish Time.");
-            applicationVersionRepository.updatePublishTime();
-            LOGGER.info("update publish time success.");
-        }
-
-        private ProjectCategoryEDTO createProjectCatory(Long orgId) {
-            ProjectCategoryEDTO categoryEDTO = new ProjectCategoryEDTO();
-            categoryEDTO.setCode("ops-default");
-            categoryEDTO.setBuiltInFlag(false);
-            categoryEDTO.setDescription("运维管理项目");
-            categoryEDTO.setName("运维项目");
-            //todo
-            List<MenuCodeDTO> list = new ArrayList<>();
-            MenuCodeDTO menuCodeDTO = new MenuCodeDTO();
-            list.add(menuCodeDTO);
-            return orgRepository.createProjectCategory(orgId, categoryEDTO);
-        }
-
-        private ProjectDTO createOpsProject(Long orgId, Long categoryId) {
-            ProjectCreateDTO createDTO = new ProjectCreateDTO();
-            List<Long> categoruIds = new ArrayList<>();
-            categoruIds.add(categoryId);
-            createDTO.setCategory("ops");
-            createDTO.setCategoryIds(categoruIds);
-            createDTO.setCode("ops-default");
-            createDTO.setName("运维专用项目");
-            return iamRepository.createProject(orgId, createDTO);
-        }
-
-
-        private void syncSonarProject(List<CheckLog> logs) {
-            if (!sonarqubeUrl.isEmpty()) {
-                SonarClient sonarClient = RetrofitHandler.getSonarClient(sonarqubeUrl, SONAR, userName, password);
-                //将所有sonar项目设为私有
-                applicationMapper.selectAll().forEach(applicationDO -> {
-                    if (applicationDO.getGitlabProjectId() != null) {
-                        LOGGER.info("sonar.project.privatet,applicationId:" + applicationDO.getId());
-                        ProjectE projectE = iamRepository.queryIamProject(applicationDO.getProjectId());
-                        Organization organization = iamRepository.queryOrganizationById(projectE.getOrganization().getId());
-                        String key = String.format("%s-%s:%s", organization.getCode(), projectE.getCode(), applicationDO.getCode());
-                        Map<String, String> maps = new HashMap<>();
-                        maps.put("project", key);
-                        maps.put("visibility", "private");
-                        try {
-                            sonarClient.updateVisibility(maps).execute();
-                        } catch (IOException e) {
-                            LOGGER.error(e.getMessage());
+                    if (appServiceDTO.getChartConfigId() != null && !appServiceDTO.getChartConfigId().equals(chartDefault.getId())) {
+                        DevopsConfigDTO devopsConfigDTO = devopsConfigMapper.selectByPrimaryKey(appServiceDTO.getChartConfigId());
+                        if (devopsConfigDTO == null) {
+                            appServiceMapper.updateChartConfigNullByServiceId(appServiceDTO.getId());
+                        } else {
+                            devopsConfigDTO.setId(null);
+                            devopsConfigDTO.setProjectId(null);
+                            devopsConfigDTO.setAppServiceId(appServiceDTO.getId());
+                            addChartConfigs.add(devopsConfigDTO);
                         }
                     }
                 });
+                devopsConfigMapper.deleteByProject();
+                appServiceMapper.updateHarborConfigNullByConfigId(harborDefault.getId());
+                appServiceMapper.updateChartConfigNullByConfigId(chartDefault.getId());
+                addHarborConfigs.forEach(devopsConfigDTO -> {
+                    devopsConfigMapper.insert(devopsConfigDTO);
+                    AppServiceDTO appServiceDTO = appServiceMapper.selectByPrimaryKey(devopsConfigDTO.getAppServiceId());
+                    appServiceDTO.setHarborConfigId(devopsConfigDTO.getId());
+                    appServiceMapper.updateByPrimaryKey(appServiceDTO);
+                });
+                addChartConfigs.forEach(devopsConfigDTO -> {
+                    devopsConfigMapper.insert(devopsConfigDTO);
+                    AppServiceDTO appServiceDTO = appServiceMapper.selectByPrimaryKey(devopsConfigDTO.getAppServiceId());
+                    appServiceDTO.setChartConfigId(devopsConfigDTO.getId());
+                    appServiceMapper.updateByPrimaryKey(appServiceDTO);
+                });
+                LOGGER.info("sync config end!!!");
+            }
+
+
+        }
+
+        private void syncHarbor() {
+            LOGGER.info("开始同步创建harbor用户账号");
+            ConfigurationProperties configurationProperties = new ConfigurationProperties(harborConfigurationProperties);
+            configurationProperties.setType("harbor");
+            Retrofit retrofit = RetrofitHandler.initRetrofit(configurationProperties);
+            HarborClient harborClient = retrofit.create(HarborClient.class);
+            ResponseEntity<PageInfo<OrganizationDTO>> organizationDOS = baseServiceClient.listOrganizations(0, 0);
+            if (organizationDOS.getStatusCode().is2xxSuccessful()) {
                 try {
-                    //更改默认新建项目为私有
-                    Map<String, String> defaultMaps = new HashMap<>();
-                    defaultMaps.put("organization", "default-organization");
-                    defaultMaps.put("projectVisibility", "private");
-                    sonarClient.updateDefaultVisibility(defaultMaps).execute();
-                    //更改默认权限模板
-                    Map<String, String> appTemplete = new HashMap<>();
-                    appTemplete.put("templateId", "default_template");
-                    appTemplete.put("groupName", "sonar-administrators");
-                    appTemplete.put(PERMISSION, "codeviewer");
-                    sonarClient.addGroupToTemplate(appTemplete).execute();
-                    appTemplete.put(PERMISSION, "user");
-                    sonarClient.addGroupToTemplate(appTemplete).execute();
+                    for (OrganizationDTO organizationDO : organizationDOS.getBody().getList()) {
+                        OrganizationDTO organization = baseServiceClientOperator.queryOrganizationById(organizationDO.getId());
+                        List<ProjectDTO> projectDTOS = baseServiceClientOperator.listIamProjectByOrgId(organizationDO.getId(), null, null, null);
+                        for (ProjectDTO projectDTO : projectDTOS) {
+                            LOGGER.info("开始创建{}{}{}的用户", projectDTO.getId(), projectDTO.getName(), projectDTO.getCode());
+                            DevopsProjectDTO devopsProjectDTO = null;
+                            try {
+                                devopsProjectDTO = devopsProjectService.baseQueryByProjectId(projectDTO.getId());
+                            } catch (CommonException e) {
+                                //未同步成功的项目不处理
+                            }
+                            if (devopsProjectDTO != null) {
+                                String username = devopsProjectDTO.getHarborProjectUserName() == null ? String.format("user%s%s", organization.getId(), projectDTO.getId()) : devopsProjectDTO.getHarborProjectUserName();
+                                String email = devopsProjectDTO.getHarborProjectUserEmail() == null ? String.format("%s@harbor.com", username) : devopsProjectDTO.getHarborProjectUserEmail();
+                                String password = devopsProjectDTO.getHarborProjectUserPassword() == null ? String.format("%spassword", username) : devopsProjectDTO.getHarborProjectUserPassword();
+                                User user = new User(username, email, password, username);
+                                //创建用户
+                                Response<Void> result = null;
+                                try {
+                                    Response<List<User>> users = harborClient.listUser(username).execute();
+                                    if (users.raw().code() != 200) {
+                                        throw new CommonException(users.errorBody().string());
+                                    }
+                                    if (users.body().isEmpty()) {
+                                        result = harborClient.insertUser(user).execute();
+                                        if (result.raw().code() != 201) {
+                                            throw new CommonException(result.errorBody().string());
+                                        }
+                                    } else {
+                                        Boolean exist = users.body().stream().anyMatch(user1 -> user1.getUsername().equals(username));
+                                        if (!exist) {
+                                            result = harborClient.insertUser(user).execute();
+                                            if (result.raw().code() != 201) {
+                                                throw new CommonException(result.errorBody().string());
+                                            }
+                                        }
+                                    }
+                                    //给项目绑定角色
+                                    Response<List<ProjectDetail>> projects = harborClient.listProject(organization.getCode() + "-" + projectDTO.getCode()).execute();
+                                    if (projects.body() != null && !projects.body().isEmpty()) {
+                                        Response<SystemInfo> systemInfoResponse = harborClient.getSystemInfo().execute();
+                                        if (systemInfoResponse.raw().code() != 200) {
+                                            throw new CommonException(systemInfoResponse.errorBody().string());
+                                        }
 
-                    Map<String, String> removeTemplete = new HashMap<>();
-                    removeTemplete.put("templateId", "default_template");
-                    removeTemplete.put("groupName", "sonar-users");
-                    removeTemplete.put(PERMISSION, "codeviewer");
-                    sonarClient.removeGroupFromTemplate(removeTemplete).execute();
-                    removeTemplete.put(PERMISSION, "user");
-                    sonarClient.removeGroupFromTemplate(removeTemplete).execute();
-                } catch (IOException e) {
-                    LOGGER.error(e.getMessage());
-                }
-            }
-        }
-
-        private void syncAppVersion() {
-            List<ApplicationVersionDO> applicationVersionDOS = applicationVersionMapper.selectAll();
-            if (!applicationVersionDOS.isEmpty() && !applicationVersionDOS.get(0).getRepository().contains(helmUrl)) {
-                if (helmUrl.endsWith("/")) {
-                    helmUrl = helmUrl.substring(0, helmUrl.length() - 1);
-                }
-                applicationVersionMapper.updateRepository(helmUrl);
-            }
-        }
-
-
-        private void syncEnvProject(List<CheckLog> logs) {
-            LOGGER.info("start to sync env project");
-            List<DevopsEnvironmentE> devopsEnvironmentES = devopsEnvironmentRepository.list();
-            devopsEnvironmentES
-                    .stream()
-                    .filter(devopsEnvironmentE -> devopsEnvironmentE.getGitlabEnvProjectId() == null)
-                    .forEach(devopsEnvironmentE -> {
-                        CheckLog checkLog = new CheckLog();
-                        try {
-                            //generate git project code
-                            checkLog.setContent("env: " + devopsEnvironmentE.getName() + " create gitops project");
-                            ProjectE projectE = iamRepository.queryIamProject(devopsEnvironmentE.getProjectE().getId());
-                            Organization organization = iamRepository
-                                    .queryOrganizationById(projectE.getOrganization().getId());
-                            //generate rsa key
-                            List<String> sshKeys = FileUtil.getSshKey(String.format("%s/%s/%s",
-                                    organization.getCode(), projectE.getCode(), devopsEnvironmentE.getCode()));
-                            devopsEnvironmentE.setEnvIdRsa(sshKeys.get(0));
-                            devopsEnvironmentE.setEnvIdRsaPub(sshKeys.get(1));
-                            devopsEnvironmentRepository.update(devopsEnvironmentE);
-                            GitlabProjectPayload gitlabProjectPayload = new GitlabProjectPayload();
-                            DevopsProjectE devopsProjectE = devopsProjectRepository.queryDevopsProject(projectE.getId());
-                            gitlabProjectPayload.setGroupId(TypeUtil.objToInteger(devopsProjectE.getDevopsEnvGroupId()));
-                            gitlabProjectPayload.setUserId(ADMIN);
-                            gitlabProjectPayload.setPath(devopsEnvironmentE.getCode());
-                            gitlabProjectPayload.setOrganizationId(null);
-                            gitlabProjectPayload.setType(ENV);
-                            devopsEnvironmentService.handleCreateEnvSaga(gitlabProjectPayload);
-                            checkLog.setResult(SUCCESS);
-                        } catch (Exception e) {
-                            LOGGER.info("create env git project error", e);
-                            checkLog.setResult(FAILED + e.getMessage());
+                                        if (systemInfoResponse.body().getHarborVersion().equals("v1.4.0")) {
+                                            Role role = new Role();
+                                            role.setUsername(user.getUsername());
+                                            role.setRoles(Arrays.asList(1));
+                                            result = harborClient.setProjectMember(projects.body().get(0).getProjectId(), role).execute();
+                                        } else {
+                                            ProjectMember projectMember = new ProjectMember();
+                                            MemberUser memberUser = new MemberUser();
+                                            memberUser.setUsername(username);
+                                            projectMember.setMemberUser(memberUser);
+                                            result = harborClient.setProjectMember(projects.body().get(0).getProjectId(), projectMember).execute();
+                                        }
+                                        if (result.raw().code() != 201 && result.raw().code() != 200 && result.raw().code() != 409) {
+                                            throw new CommonException(result.errorBody().string());
+                                        }
+                                        LOGGER.info("分配{}的角色成功", projectDTO.getName());
+                                    }
+                                    if (devopsProjectDTO.getHarborProjectUserPassword() == null) {
+                                        devopsProjectDTO.setHarborProjectUserName(user.getUsername());
+                                        devopsProjectDTO.setHarborProjectIsPrivate(false);
+                                        devopsProjectDTO.setHarborProjectUserPassword(user.getPassword());
+                                        devopsProjectDTO.setHarborProjectUserEmail(user.getEmail());
+                                    }
+                                    devopsProjectService.baseUpdate(devopsProjectDTO);
+                                    LOGGER.info("创建{}的用户成功", projectDTO.getName());
+                                } catch (IOException e) {
+                                    throw new CommonException(e);
+                                }
+                            }
                         }
-                        LOGGER.info(checkLog.toString());
-                        logs.add(checkLog);
-                    });
-        }
-
-
-        private void syncWebHook(ApplicationDO applicationDO, List<CheckLog> logs) {
-            CheckLog checkLog = new CheckLog();
-            checkLog.setContent(APP + applicationDO.getName() + " create gitlab webhook");
-            try {
-                ProjectHook projectHook = ProjectHook.allHook();
-                projectHook.setEnableSslVerification(true);
-                projectHook.setProjectId(applicationDO.getGitlabProjectId());
-                projectHook.setToken(applicationDO.getToken());
-                String uri = !gatewayUrl.endsWith("/") ? gatewayUrl + "/" : gatewayUrl;
-                uri += "devops/webhook";
-                projectHook.setUrl(uri);
-                applicationDO.setHookId(TypeUtil.objToLong(gitlabRepository
-                        .createWebHook(applicationDO.getGitlabProjectId(), ADMIN, projectHook).getId()));
-                applicationMapper.updateByPrimaryKey(applicationDO);
-                checkLog.setResult(SUCCESS);
-            } catch (Exception e) {
-                checkLog.setResult(FAILED + e.getMessage());
-            }
-            logs.add(checkLog);
-        }
-
-        private void syncBranches(ApplicationDO applicationDO, List<CheckLog> logs) {
-            CheckLog checkLog = new CheckLog();
-            checkLog.setContent(APP + applicationDO.getName() + " sync branches");
-            try {
-                Optional<List<BranchDO>> branchDOS = Optional.ofNullable(
-                        devopsGitRepository.listBranches(applicationDO.getGitlabProjectId(), ADMIN));
-                List<String> branchNames =
-                        devopsGitRepository.listDevopsBranchesByAppId(applicationDO.getId()).stream()
-                                .map(DevopsBranchE::getBranchName).collect(Collectors.toList());
-                branchDOS.ifPresent(branchDOS1 -> branchDOS1.stream()
-                        .filter(branchDO -> !branchNames.contains(branchDO.getName()))
-                        .forEach(branchDO -> {
-                            DevopsBranchE newDevopsBranchE = new DevopsBranchE();
-                            newDevopsBranchE.initApplicationE(applicationDO.getId());
-                            newDevopsBranchE.setLastCommitDate(branchDO.getCommit().getCommittedDate());
-                            newDevopsBranchE.setLastCommit(branchDO.getCommit().getId());
-                            newDevopsBranchE.setBranchName(branchDO.getName());
-                            newDevopsBranchE.setCheckoutCommit(branchDO.getCommit().getId());
-                            newDevopsBranchE.setCheckoutDate(branchDO.getCommit().getCommittedDate());
-                            newDevopsBranchE.setLastCommitMsg(branchDO.getCommit().getMessage());
-                            UserAttrE userAttrE = userAttrRepository.queryByGitlabUserName(branchDO.getCommit().getAuthorName());
-                            newDevopsBranchE.setLastCommitUser(userAttrE.getIamUserId());
-                            devopsGitRepository.createDevopsBranch(newDevopsBranchE);
-                            checkLog.setResult(SUCCESS);
-                        }));
-            } catch (Exception e) {
-                checkLog.setResult(FAILED + e.getMessage());
-            }
-            logs.add(checkLog);
-        }
-
-
-        @Saga(code = "devops-upgrade-0.9",
-                description = "Devops平滑升级到0.9", inputSchema = "{}")
-        private void gitOpsUserAccess() {
-            if (LOGGER.isInfoEnabled()) {
-                LOGGER.info(" saga start");
-            }
-            sagaClient.startSaga("devops-upgrade-0.9", new StartInstanceDTO("{}", "", "", ResourceLevel.SITE.value(), 0L));
-            if (LOGGER.isInfoEnabled()) {
-                LOGGER.info(" saga start success");
-            }
-        }
-
-        private void syncNonEnvGroupProject(List<CheckLog> logs) {
-            List<DevopsProjectDO> projectDOList = devopsCheckLogRepository.queryNonEnvGroupProject();
-            LOGGER.info("{} projects need to upgrade", projectDOList.size());
-            final String groupCodeSuffix = "gitops";
-            projectDOList.forEach(t -> {
-                CheckLog checkLog = new CheckLog();
-                try {
-                    Long projectId = t.getIamProjectId();
-                    ProjectE projectE = iamRepository.queryIamProject(projectId);
-                    checkLog.setContent("project: " + projectE.getName() + " create gitops group");
-                    Organization organization = iamRepository
-                            .queryOrganizationById(projectE.getOrganization().getId());
-                    //创建gitlab group
-                    GroupDO group = new GroupDO();
-                    // name: orgName-projectName
-                    group.setName(String.format("%s-%s-%s",
-                            organization.getName(), projectE.getName(), groupCodeSuffix));
-                    // path: orgCode-projectCode
-                    group.setPath(String.format("%s-%s-%s",
-                            organization.getCode(), projectE.getCode(), groupCodeSuffix));
-                    ResponseEntity<GroupDO> responseEntity;
-                    try {
-                        responseEntity = gitlabServiceClient.createGroup(group, ADMIN);
-                        group = responseEntity.getBody();
-                        DevopsProjectDO devopsProjectDO = new DevopsProjectDO(projectId);
-                        devopsProjectDO.setDevopsEnvGroupId(TypeUtil.objToLong(group.getId()));
-                        devopsProjectRepository.updateProjectAttr(devopsProjectDO);
-                        checkLog.setResult(SUCCESS);
-                    } catch (CommonException e) {
-                        checkLog.setResult(e.getMessage());
                     }
                 } catch (Exception e) {
-                    LOGGER.info("create project GitOps group error");
-                    checkLog.setResult(FAILED + e.getMessage());
+                    LOGGER.info("failed", e);
+                    throw new CommonException(e);
                 }
-                LOGGER.info(checkLog.toString());
+            }
+            LOGGER.info("同步创建harbor用户账号成功");
+        }
+
+        private void syncEnvAppRelevance(List<CheckLog> logs) {
+            LOGGER.info("Start syncing relevance.");
+            List<DevopsEnvAppServiceDTO> applicationInstanceDTOS =appServiceInstanceMapper.listAllDistinctWithoutDeleted();
+
+            applicationInstanceDTOS.forEach(v -> {
+                CheckLog checkLog = new CheckLog();
+                checkLog.setContent(String.format(
+                        "Sync environment application relationship,envId: %s, appServiceId: %s", v.getEnvId(), v.getAppServiceId()));
+                try {
+                    devopsEnvAppServiceMapper.insertIgnore(v);
+                    checkLog.setResult(SUCCESS);
+                } catch (Exception e) {
+                    checkLog.setResult(FAILED);
+                    LOGGER.info(e.getMessage(), e);
+                }
                 logs.add(checkLog);
             });
+            LOGGER.info("End syncing relevance.");
         }
+
+        /**
+         * 修复应用服务和环境的状态字段
+         */
+        private void syncEnvAndAppServiceStatus() {
+            LOGGER.info("Start syncing status.");
+            // 为应用服务的 `is_failed` 字段在迁移数据中修复 null 值为0
+            appServiceMapper.updateIsFailedNullToFalse();
+
+            // 将`is_failed`为1的值的应用服务和环境的纪录的`is_synchro`字段设为1
+            appServiceMapper.updateIsSynchroToTrueWhenFailed();
+            devopsEnvironmentMapper.updateIsSynchroToTrueWhenFailed();
+
+            // 将`is_active` 为 null 的应用服务和环境纪录该字段设为 1(true)
+            appServiceMapper.updateIsActiveNullToTrue();
+            devopsEnvironmentMapper.updateIsActiveNullToTrue();
+            LOGGER.info("End syncing status.");
+        }
+
+        private void syncAppShare(List<CheckLog> logs) {
+            DevopsCheckLogDTO devopsCheckLogDTO = new DevopsCheckLogDTO();
+            devopsCheckLogDTO.setLog("sync appService share success!");
+            if (devopsCheckLogMapper.select(devopsCheckLogDTO).size() > 0) {
+                LOGGER.info("It's been synchronized appService share.");
+                return;
+            }
+            LOGGER.info("delete application market data.");
+            applicationShareMapper.deleteAll();
+            LOGGER.info("insert application share rule.");
+            appServiceVersionMapper.selectAll().stream()
+                    .forEach(versionDTO -> {
+                        CheckLog checkLog = new CheckLog();
+                        checkLog.setContent(String.format(
+                                "Sync application share rule,versionId: %s, appServiceId: %s", versionDTO.getId(), versionDTO.getAppServiceId()));
+                        AppServiceShareRuleDTO appServiceShareRuleDTO = new AppServiceShareRuleDTO();
+                        appServiceShareRuleDTO.setShareLevel("organization");
+                        appServiceShareRuleDTO.setVersion(versionDTO.getVersion());
+                        appServiceShareRuleDTO.setAppServiceId(versionDTO.getAppServiceId());
+                        if (applicationShareMapper.insert(appServiceShareRuleDTO) != 1) {
+                            checkLog.setResult(FAILED);
+                        } else {
+                            checkLog.setResult(SUCCESS);
+                        }
+                        logs.add(checkLog);
+                    });
+            devopsCheckLogMapper.insert(devopsCheckLogDTO);
+            LOGGER.info("sync appService share success!");
+            appServiceVersionMapper.updatePublishTime();
+        }
+
+
+        /**
+         * 迁移部署纪录数据，已经完成容错处理
+         */
+        private void syncDeployRecord(List<CheckLog> checkLogs) {
+            LOGGER.info("修复部署记录数据开始。此过程耗时稍长");
+            // 只查出数据库中需要修复的手动部署实例的记录
+            List<DevopsDeployRecordDTO> manualRecords = devopsEnvCommandMapper.listAllInstanceCommandToMigrate()
+                    .stream()
+                    .map(devopsEnvCommandDTO -> new DevopsDeployRecordDTO(devopsEnvCommandDTO.getProjectId(), "manual", devopsEnvCommandDTO.getId(), devopsEnvCommandDTO.getEnvId().toString(), devopsEnvCommandDTO.getCreationDate()))
+                    .collect(Collectors.toList());
+            LOGGER.info("共{}条手动部署的纪录需要迁移。", manualRecords.size());
+
+
+            // 只查出数据库中需要修复的自动部署的纪录
+            List<DevopsDeployRecordDTO> autoRecords = pipelineRecordMapper.listAllPipelineRecordToMigrate()
+                    .stream()
+                    .map(pipelineRecordDTO -> new DevopsDeployRecordDTO(pipelineRecordDTO.getProjectId(), "auto", pipelineRecordDTO.getId(), pipelineRecordDTO.getEnv(), pipelineRecordDTO.getCreationDate()))
+                    .collect(Collectors.toList());
+            LOGGER.info("共{}条自动部署的纪录需要迁移。", autoRecords.size());
+
+            // 所有待插入的纪录
+            manualRecords.addAll(autoRecords);
+            manualRecords = manualRecords.stream().sorted(Comparator.comparing(DevopsDeployRecordDTO::getDeployTime)).collect(Collectors.toList());
+            if (!CollectionUtils.isEmpty(manualRecords)) {
+                devopsDeployRecordMapper.batchInsertSelective(manualRecords);
+            }
+
+            LOGGER.info("修复部署记录数据结束");
+        }
+
+        private <T> List<T> peekListSize(List<T> objects, String message) {
+            LOGGER.info(message, objects.size());
+            return objects;
+        }
+
+        private void syncClusterAndCertifications(List<CheckLog> checkLogs) {
+            LOGGER.info("开始迁移集群和证书到项目下!");
+            Map<Long, List<DevopsClusterDTO>> clusters = peekListSize(devopsClusterMapper.listAllClustersToMigrate(),
+                    "There are {} clusters to be migrated.")
+                    .stream()
+                    .collect(Collectors.groupingBy(DevopsClusterDTO::getOrganizationId));
+
+            Map<Long, List<CertificationDTO>> orgCertifications = peekListSize(devopsCertificationMapper.listAllOrgCertificationToMigrate(), "There are {} certifications to be migrated.")
+                    .stream()
+                    .collect(Collectors.groupingBy(CertificationDTO::getOrganizationId));
+
+            Set<Long> allOrgIds = new HashSet<>(clusters.keySet());
+            allOrgIds.addAll(orgCertifications.keySet());
+            LOGGER.info("The number of organizations involved is {}", allOrgIds.size());
+
+            // 项目所有者的角色id
+            Long projectOwnerId = baseServiceClientOperator.queryRoleIdByCode(PROJECT_OWNER);
+
+            allOrgIds.forEach(organizationId -> {
+                ProjectDTO projectDTO = queryOrCreateMigrationProject(organizationId, projectOwnerId);
+                LOGGER.info("迁移id为{}的组织下的证书和集群到id为{}的项目下.", organizationId, projectDTO.getId());
+
+                // 迁移集群
+                if (clusters.containsKey(organizationId)) {
+                    clusters.get(organizationId).forEach(cluster -> {
+                        LOGGER.info("Sync cluster migration to the project,clusterId: {}, organizationId: {}", cluster.getId(), organizationId);
+                        CheckLog checkLog = new CheckLog();
+                        checkLog.setContent(String.format(
+                                "Sync cluster migration to the project,clusterId: %s, organizationId: %s", cluster.getId(), organizationId));
+                        if (projectDTO != null) {
+                            // 如果集群对应的项目id已经是将要设置的项目id，跳过
+                            if (Objects.equals(cluster.getProjectId(), projectDTO.getId())) {
+                                return;
+                            }
+
+                            cluster.setProjectId(projectDTO.getId());
+                            checkLog.setResult(devopsClusterMapper.updateByPrimaryKeySelective(cluster) != 1 ? FAILED : SUCCESS);
+                        } else {
+                            checkLog.setResult(FAILED);
+                        }
+                        checkLogs.add(checkLog);
+                    });
+                }
+
+                // 迁移证书
+                if (orgCertifications.containsKey(organizationId)) {
+                    orgCertifications.get(organizationId).forEach(cert -> {
+                        LOGGER.info("Migrate organization certification to the project, org-cert-id: {}, organizationId: {}", cert.getId(), organizationId);
+                        CheckLog checkLog = new CheckLog();
+                        checkLog.setContent(String.format("Migrate organization certification to the project, org-cert-id: %s, organizationId: %s", cert.getId(), organizationId));
+                        if (projectDTO != null) {
+                            // 如果证书对应的项目id已经是将要设置的项目id，跳过
+                            if (Objects.equals(cert.getProjectId(), projectDTO.getId())) {
+                                return;
+                            }
+
+                            cert.setProjectId(projectDTO.getId());
+                            checkLog.setResult(devopsCertificationMapper.updateByPrimaryKeySelective(cert) != 1 ? FAILED : SUCCESS);
+                        } else {
+                            checkLog.setResult(FAILED);
+                        }
+                        checkLogs.add(checkLog);
+                    });
+                }
+            });
+            LOGGER.info("迁移集群及证书到项目下已完成！");
+        }
+    }
+
+    /**
+     * 查询或创建用于迁移数据的项目
+     *
+     * @param organizationId     组织id
+     * @param projectOwnerRoleId 项目所有者这个角色的id
+     * @return 项目信息
+     */
+    private ProjectDTO queryOrCreateMigrationProject(Long organizationId, Long projectOwnerRoleId) {
+        final String migrationProjectName = "默认运维项目";
+        final String migrationProjectCode = "def-ops-proj";
+        final String category = "GENERAL";
+
+        ProjectDTO projectDTO = baseServiceClientOperator.queryProjectByCodeAndOrganizationId(migrationProjectCode, organizationId);
+
+        // 如果不存在，则创建组织下的项目
+        if (projectDTO == null) {
+            ProjectCreateDTO projectCreateDTO = new ProjectCreateDTO();
+            projectCreateDTO.setName(migrationProjectName);
+            projectCreateDTO.setCode(migrationProjectCode);
+            projectCreateDTO.setCategory(category);
+            projectCreateDTO.setOrganizationId(organizationId);
+
+            projectDTO = baseServiceClientOperator.createProject(organizationId, projectCreateDTO);
+            LOGGER.info("已创建项目，id为{}", projectDTO.getId());
+        } else {
+            LOGGER.info("查询当前组织下已有code为{}的项目，id为{}，该组织下的证书和集群将迁移至该项目", migrationProjectCode, projectDTO.getId());
+        }
+
+        if (!hasOwners(projectDTO.getId(), projectOwnerRoleId)) {
+            addDefaultProjectOwners(organizationId, projectDTO.getId(), projectOwnerRoleId);
+        }
+
+        return projectDTO;
+    }
+
+    /**
+     * 项目是否已有项目所有者
+     *
+     * @param projectId   项目id
+     * @param ownerRoleId 项目所有者角色id
+     * @return true 有，反之没有
+     */
+    private boolean hasOwners(Long projectId, Long ownerRoleId) {
+        return !ObjectUtils.isEmpty(baseServiceClientOperator.pagingQueryUsersByRoleIdOnProjectLevel(new PageRequest(1, 1), new RoleAssignmentSearchVO(), ownerRoleId,
+                projectId, true).getList());
+    }
+
+    private void addDefaultProjectOwners(Long organizationId, Long projectId, Long projectOwnerRoleId) {
+        // 查询所有组织的管理员
+        List<IamUserDTO> organizationOwners = baseServiceClientOperator.listAllOrganizationOwners(organizationId);
+
+        if (ObjectUtils.isEmpty(organizationOwners)) {
+            LOGGER.warn("There is no organization administrators in the organization with id {}, therefore it's not able to add project owners for project with id {}", organizationId, projectId);
+            return;
+        }
+
+        // 分配权限
+        baseServiceClientOperator.assignProjectOwnerForUsersInProject(projectId, organizationOwners.stream().map(IamUserDTO::getId).collect(Collectors.toSet()), projectOwnerRoleId);
+        LOGGER.info("Successfully add organization administrators to this project with id {}", projectId);
     }
 }

@@ -7,10 +7,11 @@ import io.choerodon.base.annotation.Permission;
 import io.choerodon.base.enums.ResourceType;
 import io.choerodon.core.exception.CommonException;
 import io.choerodon.core.iam.InitRoleCode;
-import io.choerodon.devops.api.dto.CustomMergeRequestDTO;
-import io.choerodon.devops.api.dto.DevopsBranchDTO;
-import io.choerodon.devops.api.dto.IssueDTO;
+import io.choerodon.devops.api.vo.CustomMergeRequestVO;
+import io.choerodon.devops.api.vo.DevopsBranchVO;
+import io.choerodon.devops.api.vo.IssueVO;
 import io.choerodon.devops.app.service.IssueService;
+
 import io.swagger.annotations.ApiOperation;
 import io.swagger.annotations.ApiParam;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -35,10 +36,10 @@ public class IssueController {
      * @param issueId issueID
      * @return commit列表
      */
-    @Permission(type= ResourceType.PROJECT,roles = {InitRoleCode.PROJECT_OWNER, InitRoleCode.PROJECT_MEMBER})
+    @Permission(type = ResourceType.PROJECT, roles = {InitRoleCode.PROJECT_OWNER, InitRoleCode.PROJECT_MEMBER})
     @ApiOperation(value = "根据issueId获取issue关联的commit列表")
     @GetMapping("/commit/list")
-    public ResponseEntity<List<DevopsBranchDTO>> getCommitsByIssueId(
+    public ResponseEntity<List<DevopsBranchVO>> getCommitsByIssueId(
             @ApiParam(value = "项目ID")
             @PathVariable(value = "project_id") Long projectId,
             @ApiParam(value = "issueID")
@@ -55,10 +56,10 @@ public class IssueController {
      * @param issueId issueID
      * @return 返回mergerequest列表
      */
-    @Permission(type= ResourceType.PROJECT,roles = {InitRoleCode.PROJECT_OWNER, InitRoleCode.PROJECT_MEMBER})
+    @Permission(type = ResourceType.PROJECT, roles = {InitRoleCode.PROJECT_OWNER, InitRoleCode.PROJECT_MEMBER})
     @ApiOperation(value = "根据issueId获取issue关联的mergerequest列表")
     @GetMapping("/merge_request/list")
-    public ResponseEntity<List<CustomMergeRequestDTO>> getMergeRequestsByIssueId(
+    public ResponseEntity<List<CustomMergeRequestVO>> getMergeRequestsByIssueId(
             @ApiParam(value = "项目ID")
             @PathVariable(value = "project_id") Long projectId,
             @ApiParam(value = "issueID")
@@ -75,10 +76,10 @@ public class IssueController {
      * @param issueId issueID
      * @return 返回mergerequest和commit数量
      */
-    @Permission(type= ResourceType.PROJECT,roles = {InitRoleCode.PROJECT_OWNER, InitRoleCode.PROJECT_MEMBER})
+    @Permission(type = ResourceType.PROJECT, roles = {InitRoleCode.PROJECT_OWNER, InitRoleCode.PROJECT_MEMBER})
     @ApiOperation(value = "根据issueId获取issue关联的mergerequest和commit数量")
     @GetMapping("/commit_and_merge_request/count")
-    public ResponseEntity<IssueDTO> countCommitAndMergeRequest(
+    public ResponseEntity<IssueVO> countCommitAndMergeRequest(
             @ApiParam(value = "项目ID")
             @PathVariable(value = "project_id") Long projectId,
             @ApiParam(value = "issueID")

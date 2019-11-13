@@ -5,7 +5,7 @@ import org.springframework.stereotype.Component;
 import io.choerodon.core.notify.Level;
 import io.choerodon.core.notify.NotifyBusinessType;
 import io.choerodon.core.notify.PmTemplate;
-import io.choerodon.devops.infra.common.util.enums.PipelineNoticeType;
+import io.choerodon.devops.infra.enums.PipelineNoticeType;
 
 /**
  * Creator: ChangpingShi0213@gmail.com
@@ -39,6 +39,6 @@ public class PipelineStopPmTemplate implements PmTemplate {
     @Override
     public String content() {
         return "<p>流水线“${pipelineName}”在【${stageName}】阶段被${auditName}:${realName}终止<p>" +
-                "<p><a href=#/devops/pipeline-record/detail/${pipelineId}/${pipelineRecordId}?type=project&id=${projectId}&name=${projectName}&category=undefined&organizationId=${organizationId}>查看详情</a >";
+                "<p><a href=#/devops/deployment-operation?type=project&id=${projectId}&name=${projectName}&category=undefined&organizationId=${organizationId}&orgId=${organizationId}&pipelineRecordId=${pipelineRecordId}>查看详情</a >";
     }
 }

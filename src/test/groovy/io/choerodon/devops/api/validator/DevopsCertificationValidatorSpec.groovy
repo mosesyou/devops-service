@@ -1,7 +1,7 @@
 package io.choerodon.devops.api.validator
 
 import io.choerodon.core.exception.CommonException
-import io.choerodon.devops.domain.application.repository.CertificationRepository
+import io.choerodon.devops.app.service.CertificationService
 import org.mockito.Mockito
 import spock.lang.Specification
 
@@ -11,7 +11,7 @@ import spock.lang.Specification
  *
  */
 class DevopsCertificationValidatorSpec extends Specification {
-    CertificationRepository mockCertificationRepository = Mockito.mock(CertificationRepository)
+    CertificationService mockCertificationRepository = Mockito.mock(CertificationService)
     DevopsCertificationValidator devopsCertificationValidator = new DevopsCertificationValidator(mockCertificationRepository)
 
     def "CheckCertification For Valid Input"() {
@@ -19,7 +19,7 @@ class DevopsCertificationValidatorSpec extends Specification {
         String name = "z-z"
         Long envId = 1L
 
-        Mockito.when(mockCertificationRepository.checkCertNameUniqueInEnv(Mockito.anyLong(), Mockito.anyString())).thenReturn(true)
+        Mockito.when(mockCertificationRepository.baseCheckCertNameUniqueInEnv(Mockito.anyLong(), Mockito.anyString())).thenReturn(true)
 
         when: "调用方法"
         devopsCertificationValidator.checkCertification(envId, name)
@@ -32,7 +32,7 @@ class DevopsCertificationValidatorSpec extends Specification {
         given: "准备数据"
         Long envId = 1L
 
-        Mockito.when(mockCertificationRepository.checkCertNameUniqueInEnv(Mockito.anyLong(), Mockito.anyString())).thenReturn(false)
+        Mockito.when(mockCertificationRepository.baseCheckCertNameUniqueInEnv(Mockito.anyLong(), Mockito.anyString())).thenReturn(false)
 
         when: "调用方法"
         devopsCertificationValidator.checkCertification(envId, name)

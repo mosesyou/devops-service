@@ -2,6 +2,7 @@ package io.choerodon.devops.api.controller.v1;
 
 import java.util.List;
 import java.util.Optional;
+import javax.validation.Valid;
 
 import com.github.pagehelper.PageInfo;
 import io.choerodon.base.annotation.Permission;
@@ -9,7 +10,7 @@ import io.choerodon.base.domain.PageRequest;
 import io.choerodon.base.enums.ResourceType;
 import io.choerodon.core.exception.CommonException;
 import io.choerodon.core.iam.InitRoleCode;
-import io.choerodon.devops.api.dto.*;
+import io.choerodon.devops.api.vo.*;
 import io.choerodon.devops.app.service.ClusterNodeInfoService;
 import io.choerodon.devops.app.service.DevopsClusterService;
 import io.choerodon.swagger.annotation.CustomPageRequest;
@@ -22,7 +23,7 @@ import org.springframework.web.bind.annotation.*;
 import springfox.documentation.annotations.ApiIgnore;
 
 @RestController
-@RequestMapping(value = "/v1/organizations/{organization_id}/clusters")
+@RequestMapping(value = "/v1/projects/{project_id}/clusters")
 public class DevopsClusterController {
     private static final String ERROR_CLUSTER_QUERY = "error.cluster.query";
 
@@ -32,58 +33,58 @@ public class DevopsClusterController {
     private ClusterNodeInfoService clusterNodeInfoService;
 
     /**
-     * 组织下创建集群
+     * 项目下创建集群
      *
-     * @param organizationId      组织Id
-     * @param devopsClusterReqDTO 集群信息
+     * @param projectId          项目Id
+     * @param devopsClusterReqVO 集群信息
      */
-    @Permission(type= ResourceType.ORGANIZATION, roles = {InitRoleCode.ORGANIZATION_ADMINISTRATOR})
-    @ApiOperation(value = "组织下创建集群")
+    @Permission(type = ResourceType.PROJECT, roles = {InitRoleCode.PROJECT_OWNER})
+    @ApiOperation(value = "项目下创建集群")
     @PostMapping
     public ResponseEntity<String> create(
-            @ApiParam(value = "组织Id", required = true)
-            @PathVariable(value = "organization_id") Long organizationId,
+            @ApiParam(value = "项目Id", required = true)
+            @PathVariable(value = "project_id") Long projectId,
             @ApiParam(value = "集群信息", required = true)
-            @RequestBody DevopsClusterReqDTO devopsClusterReqDTO) {
-        return Optional.ofNullable(devopsClusterService.createCluster(organizationId, devopsClusterReqDTO))
+            @RequestBody @Valid DevopsClusterReqVO devopsClusterReqVO) {
+        return Optional.ofNullable(devopsClusterService.createCluster(projectId, devopsClusterReqVO))
                 .map(target -> new ResponseEntity<>(target, HttpStatus.OK))
                 .orElseThrow(() -> new CommonException("error.devops.cluster.insert"));
     }
 
     /**
-     * 更新集群下的项目
+     * 更新集群
      *
-     * @param organizationId      组织Id
-     * @param devopsClusterReqDTO 集群对象
+     * @param projectId             项目Id
+     * @param devopsClusterUpdateVO 集群对象
      */
-    @Permission(type= ResourceType.ORGANIZATION, roles = {InitRoleCode.ORGANIZATION_ADMINISTRATOR})
-    @ApiOperation(value = "更新集群下的项目")
-    @PutMapping
+    @Permission(type = ResourceType.PROJECT, roles = {InitRoleCode.PROJECT_OWNER})
+    @ApiOperation(value = "更新集群")
+    @PutMapping("/{cluster_id}")
     public void update(
-            @ApiParam(value = "组织Id", required = true)
-            @PathVariable(value = "organization_id") Long organizationId,
+            @ApiParam(value = "项目Id", required = true)
+            @PathVariable(value = "project_id") Long projectId,
             @ApiParam(value = "集群Id")
-            @RequestParam Long clusterId,
+            @PathVariable("cluster_id") Long clusterId,
             @ApiParam(value = "集群对象")
-            @RequestBody DevopsClusterReqDTO devopsClusterReqDTO) {
-        devopsClusterService.updateCluster(clusterId, devopsClusterReqDTO);
+            @RequestBody @Valid DevopsClusterUpdateVO devopsClusterUpdateVO) {
+        devopsClusterService.updateCluster(clusterId, devopsClusterUpdateVO);
     }
 
     /**
      * 查询单个集群信息
      *
-     * @param organizationId 组织Id
-     * @param clusterId      集群Id
+     * @param projectId 项目Id
+     * @param clusterId 集群Id
      */
-    @Permission(type= ResourceType.ORGANIZATION, roles = {InitRoleCode.ORGANIZATION_ADMINISTRATOR})
+    @Permission(type = ResourceType.PROJECT, roles = {InitRoleCode.PROJECT_OWNER})
     @ApiOperation(value = "查询单个集群信息")
-    @GetMapping("/{clusterId}")
-    public ResponseEntity<DevopsClusterRepDTO> query(
-            @ApiParam(value = "组织Id", required = true)
-            @PathVariable(value = "organization_id") Long organizationId,
+    @GetMapping("/{cluster_id}")
+    public ResponseEntity<DevopsClusterRepVO> query(
+            @ApiParam(value = "项目Id", required = true)
+            @PathVariable(value = "project_id") Long projectId,
             @ApiParam(value = "集群Id")
-            @PathVariable Long clusterId) {
-        return Optional.ofNullable(devopsClusterService.getCluster(clusterId))
+            @PathVariable(value = "cluster_id") Long clusterId) {
+        return Optional.ofNullable(devopsClusterService.query(clusterId))
                 .map(target -> new ResponseEntity<>(target, HttpStatus.OK))
                 .orElseThrow(() -> new CommonException(ERROR_CLUSTER_QUERY));
     }
@@ -91,18 +92,18 @@ public class DevopsClusterController {
     /**
      * 根据code查询集群
      *
-     * @param organizationId 组织Id
-     * @param code           集群Code
+     * @param projectId 项目Id
+     * @param code      集群Code
      */
-    @Permission(type= ResourceType.ORGANIZATION,roles = {InitRoleCode.ORGANIZATION_ADMINISTRATOR})
+    @Permission(type = ResourceType.PROJECT, roles = {InitRoleCode.PROJECT_OWNER})
     @ApiOperation(value = "根据code查询集群")
     @GetMapping("/query_by_code")
-    public ResponseEntity<DevopsClusterRepDTO> queryByCode(
-            @ApiParam(value = "组织Id", required = true)
-            @PathVariable(value = "organization_id") Long organizationId,
+    public ResponseEntity<DevopsClusterRepVO> queryByCode(
+            @ApiParam(value = "项目Id", required = true)
+            @PathVariable(value = "project_id") Long projectId,
             @ApiParam(value = "集群Code")
             @RequestParam String code) {
-        return Optional.ofNullable(devopsClusterService.queryByCode(organizationId, code))
+        return Optional.ofNullable(devopsClusterService.queryByCode(projectId, code))
                 .map(target -> new ResponseEntity<>(target, HttpStatus.OK))
                 .orElseThrow(() -> new CommonException(ERROR_CLUSTER_QUERY));
     }
@@ -110,101 +111,161 @@ public class DevopsClusterController {
     /**
      * 校验集群名唯一性
      *
-     * @param organizationId 项目id
-     * @param name           集群name
+     * @param projectId 项目id
+     * @param name      集群name
      */
-    @Permission(type= ResourceType.ORGANIZATION,roles = {InitRoleCode.ORGANIZATION_ADMINISTRATOR})
+    @Permission(type = ResourceType.PROJECT, roles = {InitRoleCode.PROJECT_OWNER})
     @ApiOperation(value = "校验集群名唯一性")
     @GetMapping(value = "/check_name")
     public void checkName(
-            @ApiParam(value = "组织Id", required = true)
-            @PathVariable(value = "organization_id") Long organizationId,
+            @ApiParam(value = "项目Id", required = true)
+            @PathVariable(value = "project_id") Long projectId,
             @ApiParam(value = "集群name", required = true)
             @RequestParam String name) {
-        devopsClusterService.checkName(organizationId, name);
+        devopsClusterService.checkName(projectId, name);
     }
 
     /**
      * 校验集群编码唯一性
      *
-     * @param organizationId 项目id
-     * @param code           集群code
+     * @param projectId 项目id
+     * @param code      集群code
      */
-    @Permission(type= ResourceType.ORGANIZATION,roles = {InitRoleCode.ORGANIZATION_ADMINISTRATOR})
-    @ApiOperation(value = "校验集群名唯一性")
+    @Permission(type = ResourceType.PROJECT, roles = {InitRoleCode.PROJECT_OWNER})
+    @ApiOperation(value = "校验集群code唯一性")
     @GetMapping(value = "/check_code")
     public void checkCode(
-            @ApiParam(value = "组织Id", required = true)
-            @PathVariable(value = "organization_id") Long organizationId,
+            @ApiParam(value = "项目Id", required = true)
+            @PathVariable(value = "project_id") Long projectId,
             @ApiParam(value = "集群code", required = true)
             @RequestParam String code) {
-        devopsClusterService.checkCode(organizationId, code);
+        devopsClusterService.checkCode(projectId, code);
     }
 
     /**
-     * 分页查询项目列表
+     * 分页查询集群下已有权限的项目列表
      *
-     * @param organizationId 项目id
-     * @return Page
+     * @param projectId   项目id
+     * @param clusterId   集群id
+     * @param pageRequest 分页参数
+     * @param params      查询参数
+     * @return page
      */
-    @Permission(type= ResourceType.ORGANIZATION,
-            roles = {InitRoleCode.ORGANIZATION_ADMINISTRATOR})
-    @ApiOperation(value = "分页查询项目列表")
-    @CustomPageRequest
-    @PostMapping("/page_projects")
-    public ResponseEntity<PageInfo<ProjectDTO>> pageProjects(
-            @ApiParam(value = "组织ID", required = true)
-            @PathVariable(value = "organization_id") Long organizationId,
+    @Permission(type = ResourceType.PROJECT, roles = {InitRoleCode.PROJECT_OWNER})
+    @ApiOperation(value = "分页查询集群下已有权限的项目列表")
+    @PostMapping("/{cluster_id}/permission/page_related")
+    public ResponseEntity<PageInfo<ProjectReqVO>> pageRelatedProjects(
+            @ApiParam(value = "项目ID", required = true)
+            @PathVariable(value = "project_id") Long projectId,
+            @ApiParam(value = "集群Id")
+            @PathVariable(value = "cluster_id") Long clusterId,
             @ApiParam(value = "分页参数")
             @ApiIgnore PageRequest pageRequest,
-            @ApiParam(value = "集群Id")
-            @RequestParam(required = false) Long clusterId,
             @ApiParam(value = "模糊搜索参数")
-            @RequestBody String[] params) {
-        return Optional.ofNullable(devopsClusterService.listProjects(organizationId, clusterId, pageRequest, params))
+            @RequestBody(required = false) String params) {
+        return Optional.ofNullable(devopsClusterService.pageRelatedProjects(projectId, clusterId, pageRequest, params))
                 .map(target -> new ResponseEntity<>(target, HttpStatus.OK))
                 .orElseThrow(() -> new CommonException("error.project.query"));
     }
 
     /**
-     * 查询已有权限的项目列表
+     * 列出组织下所有项目中在数据库中没有权限关联关系的项目(不论当前数据库中是否跳过权限检查)
      *
-     * @param organizationId 项目id
-     * @return List
+     * @param projectId 项目ID
+     * @param clusterId 集群ID
+     * @param params    搜索参数
+     * @return 列出组织下所有项目中在数据库中没有权限关联关系的项目
      */
-    @Permission(type= ResourceType.ORGANIZATION,
-            roles = {InitRoleCode.ORGANIZATION_ADMINISTRATOR})
-    @ApiOperation(value = "查询已有权限的项目列表")
-    @GetMapping("/list_cluster_projects/{clusterId}")
-    public ResponseEntity<List<ProjectDTO>> listClusterProjects(
-            @ApiParam(value = "组织ID", required = true)
-            @PathVariable(value = "organization_id") Long organizationId,
-            @ApiParam(value = "集群Id")
-            @PathVariable Long clusterId) {
-        return Optional.ofNullable(devopsClusterService.listClusterProjects(organizationId, clusterId))
-                .map(target -> new ResponseEntity<>(target, HttpStatus.OK))
-                .orElseThrow(() -> new CommonException("error.project.query"));
+    @Permission(type = ResourceType.PROJECT, roles = {InitRoleCode.PROJECT_OWNER})
+    @ApiOperation(value = "查询组织下所有与该集群未分配权限的项目")
+    @PostMapping(value = "/{cluster_id}/permission/list_non_related")
+    public ResponseEntity<List<ProjectReqVO>> listAllNonRelatedProjects(
+            @ApiParam(value = "项目id", required = true)
+            @PathVariable(value = "project_id") Long projectId,
+            @ApiParam(value = "集群id", required = true)
+            @PathVariable(value = "cluster_id") Long clusterId,
+            @ApiParam(value = "查询参数")
+            @RequestBody(required = false) String params) {
+        return new ResponseEntity<>(devopsClusterService.listNonRelatedProjects(projectId, clusterId, params), HttpStatus.OK);
+    }
+
+    /**
+     * 集群下为项目分配权限
+     *
+     * @param clusterId                       集群id
+     * @param devopsClusterPermissionUpdateVO 权限分配信息
+     */
+    @Permission(type = ResourceType.PROJECT,
+            roles = {InitRoleCode.PROJECT_OWNER})
+    @ApiOperation(value = "集群下为项目分配权限")
+    @PostMapping(value = "/{cluster_id}/permission")
+    public ResponseEntity assignPermission(
+            @ApiParam(value = "项目id", required = true)
+            @PathVariable(value = "project_id") Long projectId,
+            @ApiParam(value = "集群id", required = true)
+            @PathVariable(value = "cluster_id") Long clusterId,
+            @ApiParam(value = "权限分配信息")
+            @RequestBody @Valid DevopsClusterPermissionUpdateVO devopsClusterPermissionUpdateVO) {
+        devopsClusterService.assignPermission(devopsClusterPermissionUpdateVO);
+        return new ResponseEntity(HttpStatus.OK);
+    }
+
+    /**
+     * 删除集群下该项目的权限
+     *
+     * @param projectId       项目id
+     * @param clusterId       集群id
+     * @param projectToDelete 要删除权限的项目id
+     * @return NO_CONTENT
+     */
+    @Permission(type = ResourceType.PROJECT, roles = {InitRoleCode.PROJECT_OWNER})
+    @ApiOperation(value = "删除集群下该项目的权限")
+    @DeleteMapping(value = "/{cluster_id}/permission")
+    public ResponseEntity deletePermissionOfProject(
+            @ApiParam(value = "项目id", required = true)
+            @PathVariable(value = "project_id") Long projectId,
+            @ApiParam(value = "集群id", required = true)
+            @PathVariable(value = "cluster_id") Long clusterId,
+            @ApiParam(value = "要删除权限的项目id", required = true)
+            @RequestParam(value = "delete_project_id") Long projectToDelete) {
+        devopsClusterService.deletePermissionOfProject(clusterId, projectToDelete);
+        return new ResponseEntity(HttpStatus.NO_CONTENT);
     }
 
 
     /**
      * 查询shell脚本
      *
-     * @param organizationId 组织ID
-     * @param clusterId      集群Id
+     * @param projectId 项目ID
+     * @param clusterId 集群Id
      * @return String
      */
-    @Permission(type= ResourceType.ORGANIZATION,
-            roles = {InitRoleCode.ORGANIZATION_ADMINISTRATOR})
+    @Permission(type = ResourceType.PROJECT, roles = {InitRoleCode.PROJECT_OWNER})
     @ApiOperation(value = "查询shell脚本")
     @CustomPageRequest
-    @GetMapping("/query_shell/{clusterId}")
+    @GetMapping("/query_shell/{cluster_id}")
     public ResponseEntity<String> queryShell(
-            @ApiParam(value = "组织ID", required = true)
-            @PathVariable(value = "organization_id") Long organizationId,
+            @ApiParam(value = "项目ID", required = true)
+            @PathVariable(value = "project_id") Long projectId,
             @ApiParam(value = "集群Id", required = true)
-            @PathVariable Long clusterId) {
+            @PathVariable(value = "cluster_id") Long clusterId) {
         return Optional.ofNullable(devopsClusterService.queryShell(clusterId))
+                .map(target -> new ResponseEntity<>(target, HttpStatus.OK))
+                .orElseThrow(() -> new CommonException(ERROR_CLUSTER_QUERY));
+    }
+
+    /**
+     * 查询项目下的集群以及所有节点名称
+     *
+     * @param projectId 项目ID
+     */
+    @Permission(type = ResourceType.PROJECT, roles = {InitRoleCode.PROJECT_OWNER, InitRoleCode.PROJECT_MEMBER})
+    @ApiOperation(value = "项目下所有集群以及所有的节点名称")
+    @GetMapping("/tree_menu")
+    public ResponseEntity<List<DevopsClusterBasicInfoVO>> queryClustersAndNodes(
+            @ApiParam(value = "项目Id", required = true)
+            @PathVariable(value = "project_id") Long projectId) {
+        return Optional.ofNullable(devopsClusterService.queryClustersAndNodes(projectId))
                 .map(target -> new ResponseEntity<>(target, HttpStatus.OK))
                 .orElseThrow(() -> new CommonException(ERROR_CLUSTER_QUERY));
     }
@@ -212,24 +273,23 @@ public class DevopsClusterController {
     /**
      * 集群列表查询
      *
-     * @param organizationId 组织ID
+     * @param projectId 项目ID
      * @return Page
      */
-    @Permission(type= ResourceType.ORGANIZATION,
-            roles = {InitRoleCode.ORGANIZATION_ADMINISTRATOR})
+    @Permission(type = ResourceType.PROJECT, roles = {InitRoleCode.PROJECT_OWNER})
     @ApiOperation(value = "集群列表查询")
     @CustomPageRequest
     @PostMapping("/page_cluster")
-    public ResponseEntity<PageInfo<ClusterWithNodesDTO>> listCluster(
-            @ApiParam(value = "组织ID", required = true)
-            @PathVariable(value = "organization_id") Long organizationId,
+    public ResponseEntity<PageInfo<ClusterWithNodesVO>> pageCluster(
+            @ApiParam(value = "项目ID", required = true)
+            @PathVariable(value = "project_id") Long projectId,
             @ApiParam(value = "分页参数")
             @ApiIgnore PageRequest pageRequest,
             @ApiParam(value = "是否需要分页")
             @RequestParam(value = "doPage", required = false) Boolean doPage,
             @ApiParam(value = "查询参数")
             @RequestBody(required = false) String params) {
-        return Optional.ofNullable(devopsClusterService.pageClusters(organizationId, doPage, pageRequest, params))
+        return Optional.ofNullable(devopsClusterService.pageClusters(projectId, doPage, pageRequest, params))
                 .map(target -> new ResponseEntity<>(target, HttpStatus.OK))
                 .orElseThrow(() -> new CommonException(ERROR_CLUSTER_QUERY));
     }
@@ -238,39 +298,37 @@ public class DevopsClusterController {
     /**
      * 删除集群
      *
-     * @param organizationId 组织ID
-     * @param clusterId      集群Id
+     * @param projectId 项目ID
+     * @param clusterId 集群Id
      * @return String
      */
-    @Permission(type= ResourceType.ORGANIZATION,
-            roles = {InitRoleCode.ORGANIZATION_ADMINISTRATOR})
+    @Permission(type = ResourceType.PROJECT, roles = {InitRoleCode.PROJECT_OWNER})
     @ApiOperation(value = "删除集群")
-    @DeleteMapping("/{clusterId}")
+    @DeleteMapping("/{cluster_id}")
     public void deleteCluster(
-            @ApiParam(value = "组织ID", required = true)
-            @PathVariable(value = "organization_id") Long organizationId,
+            @ApiParam(value = "项目ID", required = true)
+            @PathVariable(value = "project_id") Long projectId,
             @ApiParam(value = "集群Id")
-            @PathVariable Long clusterId) {
+            @PathVariable(value = "cluster_id") Long clusterId) {
         devopsClusterService.deleteCluster(clusterId);
     }
 
     /**
      * 查询集群下是否关联已连接环境
      *
-     * @param organizationId 组织ID
-     * @param clusterId      集群Id
+     * @param projectId 项目ID
+     * @param clusterId 集群Id
      * @return String
      */
-    @Permission(type= ResourceType.ORGANIZATION,
-            roles = {InitRoleCode.ORGANIZATION_ADMINISTRATOR})
+    @Permission(type = ResourceType.PROJECT, roles = {InitRoleCode.PROJECT_OWNER})
     @ApiOperation(value = "查询集群下是否关联已连接环境")
-    @GetMapping("/{clusterId}/connect_envs")
-    public ResponseEntity<Boolean> hasConnectEnvs(
-            @ApiParam(value = "组织ID", required = true)
-            @PathVariable(value = "organization_id") Long organizationId,
+    @GetMapping("/{cluster_id}/check_connect_envs")
+    public ResponseEntity<Boolean> checkConnectEnvs(
+            @ApiParam(value = "项目ID", required = true)
+            @PathVariable(value = "project_id") Long projectId,
             @ApiParam(value = "集群Id")
-            @PathVariable Long clusterId) {
-        return Optional.ofNullable(devopsClusterService.IsClusterRelatedEnvs(clusterId))
+            @PathVariable(value = "cluster_id") Long clusterId) {
+        return Optional.ofNullable(devopsClusterService.checkConnectEnvs(clusterId))
                 .map(target -> new ResponseEntity<>(target, HttpStatus.OK))
                 .orElseThrow(() -> new CommonException("error.connect.env.query"));
     }
@@ -278,20 +336,20 @@ public class DevopsClusterController {
     /**
      * 分页查询节点下的Pod
      *
-     * @param organizationId 组织id
-     * @param clusterId      集群id
-     * @param nodeName       节点名称
-     * @param pageRequest    分页参数
-     * @param searchParam    查询参数
+     * @param projectId   项目id
+     * @param clusterId   集群id
+     * @param nodeName    节点名称
+     * @param pageRequest 分页参数
+     * @param searchParam 查询参数
      * @return pods
      */
-    @Permission(type= ResourceType.ORGANIZATION,roles = {InitRoleCode.ORGANIZATION_ADMINISTRATOR})
+    @Permission(type = ResourceType.PROJECT, roles = {InitRoleCode.PROJECT_OWNER})
     @ApiOperation(value = "分页查询节点下的Pod")
     @CustomPageRequest
     @PostMapping(value = "/page_node_pods")
-    public ResponseEntity<PageInfo<DevopsClusterPodDTO>> pageQueryPodsByNodeName(
-            @ApiParam(value = "组织ID", required = true)
-            @PathVariable(value = "organization_id") Long organizationId,
+    public ResponseEntity<PageInfo<DevopsEnvPodVO>> pageQueryPodsByNodeName(
+            @ApiParam(value = "项目ID", required = true)
+            @PathVariable(value = "project_id") Long projectId,
             @ApiParam(value = "集群id", required = true)
             @RequestParam(value = "cluster_id") Long clusterId,
             @ApiParam(value = "节点名称", required = true)
@@ -300,7 +358,7 @@ public class DevopsClusterController {
             @ApiIgnore PageRequest pageRequest,
             @ApiParam(value = "查询参数", required = false)
             @RequestBody(required = false) String searchParam) {
-        return Optional.ofNullable(devopsClusterService.pageQueryPodsByNodeName(clusterId, nodeName, pageRequest, searchParam))
+        return Optional.ofNullable(devopsClusterService.pagePodsByNodeName(clusterId, nodeName, pageRequest, searchParam))
                 .map(target -> new ResponseEntity<>(target, HttpStatus.OK))
                 .orElseThrow(() -> new CommonException("error.node.pod.query", nodeName));
     }
@@ -308,46 +366,45 @@ public class DevopsClusterController {
     /**
      * 分页查询集群下的节点
      *
-     * @param organizationId 组织ID
-     * @param clusterId      集群id
-     * @param pageRequest    分页参数
+     * @param projectId   项目ID
+     * @param clusterId   集群id
+     * @param pageRequest 分页参数
      * @return Page
      */
-    @Permission(type= ResourceType.ORGANIZATION,
-            roles = {InitRoleCode.ORGANIZATION_ADMINISTRATOR})
+    @Permission(type = ResourceType.PROJECT, roles = {InitRoleCode.PROJECT_OWNER})
     @ApiOperation(value = "分页查询集群下的节点")
     @CustomPageRequest
     @GetMapping("/page_nodes")
-    public ResponseEntity<PageInfo<ClusterNodeInfoDTO>> listClusterNodes(
-            @ApiParam(value = "组织ID", required = true)
-            @PathVariable(value = "organization_id") Long organizationId,
+    public ResponseEntity<PageInfo<ClusterNodeInfoVO>> listClusterNodes(
+            @ApiParam(value = "项目ID", required = true)
+            @PathVariable(value = "project_id") Long projectId,
             @ApiParam(value = "集群id", required = true)
             @RequestParam(value = "cluster_id") Long clusterId,
             @ApiParam(value = "分页参数")
             @ApiIgnore PageRequest pageRequest) {
-        return new ResponseEntity<>(clusterNodeInfoService.pageQueryClusterNodeInfo(clusterId, organizationId, pageRequest), HttpStatus.OK);
+        return new ResponseEntity<>(clusterNodeInfoService.pageClusterNodeInfo(clusterId, projectId, pageRequest), HttpStatus.OK);
     }
 
 
     /**
      * 根据集群id和节点名查询节点状态信息
      *
-     * @param organizationId 组织id
-     * @param clusterId      集群id
-     * @param nodeName       节点名称
+     * @param projectId 项目id
+     * @param clusterId 集群id
+     * @param nodeName  节点名称
      * @return node information
      */
-    @Permission(type= ResourceType.ORGANIZATION,roles = {InitRoleCode.ORGANIZATION_ADMINISTRATOR})
+    @Permission(type = ResourceType.PROJECT, roles = {InitRoleCode.PROJECT_OWNER})
     @ApiOperation(value = "根据集群id和节点名查询节点状态信息")
     @GetMapping(value = "/nodes")
-    public ResponseEntity<ClusterNodeInfoDTO> queryNodeInfo(
-            @ApiParam(value = "组织ID", required = true)
-            @PathVariable(value = "organization_id") Long organizationId,
+    public ResponseEntity<ClusterNodeInfoVO> queryNodeInfo(
+            @ApiParam(value = "项目ID", required = true)
+            @PathVariable(value = "project_id") Long projectId,
             @ApiParam(value = "集群id", required = true)
             @RequestParam(value = "cluster_id") Long clusterId,
             @ApiParam(value = "节点名称", required = true)
             @RequestParam(value = "node_name") String nodeName) {
-        return new ResponseEntity<>(clusterNodeInfoService.getNodeInfo(organizationId, clusterId, nodeName), HttpStatus.OK);
+        return new ResponseEntity<>(clusterNodeInfoService.queryNodeInfo(projectId, clusterId, nodeName), HttpStatus.OK);
     }
 
 

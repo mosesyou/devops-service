@@ -73,10 +73,33 @@ databaseChangeLog(logicalFilePath: 'dba/devops_application.groovy') {
         sql("UPDATE devops_application da SET da.is_skip_check_permission = FALSE WHERE da.is_skip_check_permission IS NULL")
     }
 
+
     changeSet(author: '10980', id: '2019-3-13-add-column') {
         addColumn(tableName: 'devops_application') {
             column(name: 'harbor_config_id', type: 'BIGINT UNSIGNED', remarks: 'harbor配置信息', afterColumn: 'app_template_id')
             column(name: 'chart_config_id', type: 'BIGINT UNSIGNED', remarks: 'chart配置信息', afterColumn: 'harbor_config_id')
         }
+    }
+
+    changeSet(author: 'scp', id: '2019-7-29-rename-table') {
+        addColumn(tableName: 'devops_application') {
+            column(name: 'img_url', type:  'VARCHAR(200)', remarks: '图标url', afterColumn: 'is_failed')
+        }
+        renameTable(newTableName: 'devops_app_service', oldTableName: 'devops_application')
+
+    }
+
+    changeSet(author: 'Younger', id: '2019-8-05-drop-column') {
+        dropColumn(columnName: "app_template_id", tableName: "devops_app_service")
+    }
+
+    changeSet(author: 'scp', id: '2019-09-17-add-column') {
+        addColumn(tableName: 'devops_app_service') {
+            column(name: 'mkt_app_id', type:  'BIGINT UNSIGNED', remarks: '应用市场应用Id', afterColumn: 'is_failed')
+        }
+    }
+
+    changeSet(author: 'zmf', id: '2019-09-18-add-default-value-for-failed') {
+        addDefaultValue(tableName: "devops_app_service", columnName: "is_failed", defaultValue: "0")
     }
 }

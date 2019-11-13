@@ -3,9 +3,12 @@ package io.choerodon.devops.infra.mapper;
 import java.util.List;
 import java.util.Map;
 
-import io.choerodon.devops.infra.dataobject.DevopsEnvPodDO;
-import io.choerodon.mybatis.common.Mapper;
+import io.choerodon.devops.api.vo.DevopsEnvPodInfoVO;
+
 import org.apache.ibatis.annotations.Param;
+
+import io.choerodon.devops.infra.dto.DevopsEnvPodDTO;
+import io.choerodon.mybatis.common.Mapper;
 
 /**
  * Creator: Runge
@@ -13,12 +16,17 @@ import org.apache.ibatis.annotations.Param;
  * Time: 11:53
  * Description:
  */
-public interface DevopsEnvPodMapper extends Mapper<DevopsEnvPodDO> {
+public interface DevopsEnvPodMapper extends Mapper<DevopsEnvPodDTO> {
 
-    List<DevopsEnvPodDO> listAppPod(@Param("projectId") Long projectId,
-                                    @Param("envId") Long envId,
-                                    @Param("appId") Long appId,
-                                    @Param("instanceId") Long instanceId,
-                                    @Param("searchParam") Map<String, Object> searchParam,
-                                    @Param("param") String param);
+    List<DevopsEnvPodDTO> listAppServicePod(@Param("projectId") Long projectId,
+                                            @Param("envId") Long envId,
+                                            @Param("appServiceId") Long appServiceId,
+                                            @Param("instanceId") Long instanceId,
+                                            @Param("searchParam") Map<String, Object> searchParam,
+                                            @Param("params") List<String> params);
+
+    List<DevopsEnvPodInfoVO> queryEnvPodIns(@Param("envId") Long envId);
+
+    List<DevopsEnvPodDTO> queryPodByEnvIdAndInstanceId(@Param("instanceId") Long instanceId,
+                                                       @Param("envId") Long envId);
 }

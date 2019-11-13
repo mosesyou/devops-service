@@ -3,9 +3,9 @@ spring:
     password: sa
     url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;MODE=Mysql;TRACE_LEVEL_SYSTEM_OUT=2;
     username: sa
-  # 使用本地docker里的mysql
+#   使用本地docker里的mysql
 #      username: root
-#      password:
+#      password: root
 #      url: jdbc:mysql://localhost:3306/devops_service?useUnicode=true&characterEncoding=utf-8&useSSL=false
   autoconfigure:
     exclude:
@@ -14,11 +14,9 @@ spring:
     - org.springframework.cloud.client.discovery.simple.SimpleDiscoveryClientAutoConfiguration
     - org.springframework.cloud.client.discovery.composite.CompositeDiscoveryClientAutoConfiguration
     - org.springframework.cloud.client.discovery.noop.NoopDiscoveryClientAutoConfiguration
-    - io.choerodon.websocket.SocketHelperAutoConfiguration
   h2:
     console:
       enabled: true
-
 hystrix:
   stream:
     queue:
@@ -30,14 +28,17 @@ eureka:
     enabled: false
 services:
   harbor:
-    baseUrl: "https://registry.saas.test.com"
+    baseUrl: "https://registry.saas.hand-china.com"
     username: "admin"
-    password: "Handhand123"
+    password: "Handhand1357"
+    insecureSkipTlsVerify: false
   helm:
     url: "http://helm-charts.staging.saas.test.com"
   gitlab:
     sshUrl: "git.vk.vu:2289"
     url: "http://git.alpha.saas.test.com"
+  sonarqube:
+    url: "http://sonarqube.com"
 choerodon:
   event:
     consumer:

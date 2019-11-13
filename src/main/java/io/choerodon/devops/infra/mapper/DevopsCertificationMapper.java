@@ -3,9 +3,10 @@ package io.choerodon.devops.infra.mapper;
 import java.util.List;
 import java.util.Map;
 
-import io.choerodon.devops.infra.dataobject.CertificationDO;
-import io.choerodon.mybatis.common.Mapper;
 import org.apache.ibatis.annotations.Param;
+
+import io.choerodon.devops.infra.dto.CertificationDTO;
+import io.choerodon.mybatis.common.Mapper;
 
 /**
  * Created by n!Ck
@@ -14,16 +15,31 @@ import org.apache.ibatis.annotations.Param;
  * Description:
  */
 
-public interface DevopsCertificationMapper extends Mapper<CertificationDO> {
-    List<CertificationDO> selectCertification(@Param("projectId") Long projectId,
-                                              @Param("organizationId") Long organizationId,
-                                              @Param("envId") Long envId,
-                                              @Param("searchParam") Map<String, Object> searchParam,
-                                              @Param("param") String param);
+public interface DevopsCertificationMapper extends Mapper<CertificationDTO> {
+    List<CertificationDTO> listCertificationByOptions(@Param("projectId") Long projectId,
+                                                      @Param("envId") Long envId,
+                                                      @Param("searchParam") Map<String, Object> searchParam,
+                                                      @Param("params") List<String> params);
 
-    List<CertificationDO> getActiveByDomain(@Param("projectId") Long projectId, @Param("clusterId") Long clusterId,@Param("domain") String domain);
+    List<CertificationDTO> queryActiveByDomain(@Param("projectId") Long projectId, @Param("clusterId") Long clusterId, @Param("domain") String domain);
 
-    void updateSkipCheckPro(@Param("certId") Long clusterId, @Param("skipCheckPro") Boolean skipCheckPro);
+    void updateSkipCheckPro(@Param("certId") Long certId, @Param("skipCheckPro") Boolean skipCheckPro);
 
-    List<CertificationDO> listByProjectId(@Param("projectId") Long projectId, @Param("organizationId") Long organizationId);
+    List<CertificationDTO> listByProjectId(@Param("projectId") Long projectId, @Param("organizationId") Long organizationId);
+
+    List<CertificationDTO> listAllOrgCertification();
+
+    void updateStatus(@Param("certId") Long certId, @Param("status") String status);
+
+    CertificationDTO queryById(@Param("certId") Long certId);
+
+    /**
+     * 查询证书信息及其command字段
+     *
+     * @param certId 证书id
+     * @return 证书信息
+     */
+    CertificationDTO queryDetailById(@Param("certId") Long certId);
+
+    List<CertificationDTO> listAllOrgCertificationToMigrate();
 }

@@ -41,4 +41,16 @@ databaseChangeLog(logicalFilePath: 'db/devops_gitlab_commit.groovy') {
     changeSet(author: 'n1ck', id: '2018-11-06-drop-column') {
         dropColumn(columnName: "app_name", tableName: "devops_gitlab_commit")
     }
+
+
+    changeSet(author: 'younger', id: '2019-05-27-add-index') {
+        createIndex(indexName: "gitlab_commit_idx_appid_commitdate ", tableName: "devops_gitlab_commit") {
+            column(name: "app_id")
+            column(name: "commit_date")
+        }
+    }
+
+    changeSet(author: 'scp', id: '2019-07-29-rename-column') {
+        renameColumn(columnDataType: 'BIGINT UNSIGNED', newColumnName: 'app_service_id', oldColumnName: 'app_id', tableName: 'devops_gitlab_commit')
+    }
 }

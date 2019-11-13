@@ -1,9 +1,12 @@
 package io.choerodon.devops.infra.feign.fallback;
 
+import java.util.List;
 import java.util.Map;
 
-import io.choerodon.devops.api.dto.sonar.*;
+import io.choerodon.devops.api.vo.sonar.*;
 import io.choerodon.devops.infra.feign.SonarClient;
+
+import okhttp3.ResponseBody;
 import org.springframework.stereotype.Component;
 import retrofit2.Call;
 
@@ -14,7 +17,7 @@ import retrofit2.Call;
 public class SonarClientFallback implements SonarClient {
 
     @Override
-    public Call<SonarComponent> getSonarComponet(Map<String, String> maps) {
+    public Call<SonarComponent> getSonarComponent(Map<String, String> maps) {
         return null;
     }
 
@@ -54,7 +57,7 @@ public class SonarClientFallback implements SonarClient {
     }
 
     @Override
-    public Call<Void> updateDefaultVisibility(Map<String, String> maps){
+    public Call<Void> updateDefaultVisibility(Map<String, String> maps) {
         return null;
     }
 
@@ -64,11 +67,29 @@ public class SonarClientFallback implements SonarClient {
     }
 
     @Override
-    public Call<Void> removeGroupFromTemplate(Map<String, String> maps) {return null;}
+    public Call<Void> removeGroupFromTemplate(Map<String, String> maps) {
+        return null;
+    }
 
     @Override
     public Call<Projects> listProject() {
         return null;
     }
+
+    @Override
+    public Call<Void> getUser() {
+        return null;
+    }
+
+    @Override
+    public Call<ResponseBody> createToken(Map<String, String> maps) {
+        return null;
+    }
+
+    @Override
+    public Call<ResponseBody> listToken() {
+        return null;
+    }
+
 
 }

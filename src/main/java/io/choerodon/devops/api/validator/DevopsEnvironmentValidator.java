@@ -1,11 +1,11 @@
 package io.choerodon.devops.api.validator;
 
 import io.choerodon.core.exception.CommonException;
-import io.choerodon.devops.domain.application.repository.ApplicationInstanceRepository;
-import io.choerodon.devops.domain.application.repository.DevopsIngressRepository;
-import io.choerodon.devops.domain.application.repository.DevopsServiceRepository;
-import io.choerodon.devops.domain.application.repository.PipelineAppDeployRepository;
-import io.choerodon.devops.infra.common.util.enums.InstanceStatus;
+import io.choerodon.devops.app.service.AppServiceInstanceService;
+import io.choerodon.devops.app.service.DevopsIngressService;
+import io.choerodon.devops.app.service.DevopsServiceService;
+import io.choerodon.devops.app.service.PipelineAppDeployService;
+import io.choerodon.devops.infra.enums.InstanceStatus;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
@@ -18,13 +18,13 @@ import org.springframework.stereotype.Component;
 @Component
 public class DevopsEnvironmentValidator {
     @Autowired
-    private ApplicationInstanceRepository applicationInstanceRepository;
+    private AppServiceInstanceService appServiceInstanceService;
     @Autowired
-    private DevopsIngressRepository devopsIngressRepository;
+    private DevopsIngressService devopsIngressService;
     @Autowired
-    private DevopsServiceRepository devopsServiceRepository;
+    private DevopsServiceService devopsServiceService;
     @Autowired
-    private PipelineAppDeployRepository appDeployRepository;
+    private PipelineAppDeployService pipelineAppDeployService;
 
     /**
      * 验证环境是否可以禁用
@@ -32,19 +32,19 @@ public class DevopsEnvironmentValidator {
      * @param envId 环境ID
      */
     public void checkEnvCanDisabled(Long envId) {
-        if (applicationInstanceRepository.selectByEnvId(envId).stream()
+        if (appServiceInstanceService.baseListByEnvId(envId).stream()
                 .anyMatch(applicationInstanceE ->
                         InstanceStatus.RUNNING.getStatus().equals(applicationInstanceE.getStatus()))) {
             throw new CommonException("error.env.stop.instanceExist");
         }
-        if (devopsServiceRepository.checkEnvHasService(envId)) {
+        if (devopsServiceService.baseCheckServiceByEnv(envId)) {
             throw new CommonException("error.env.stop.serviceExist");
         }
-        if (devopsIngressRepository.checkEnvHasIngress(envId)) {
+        if (devopsIngressService.baseCheckByEnv(envId)) {
             throw new CommonException("error.env.stop.IngressExist");
         }
-        if (appDeployRepository.queryByEnvId(envId).size() > 0) {
-            throw new CommonException("error.env.stop.IngressExist");
+        if (!pipelineAppDeployService.baseQueryByEnvId(envId).isEmpty()) {
+            throw new CommonException("error.env.stop.pipeline.app.deploy.exist");
         }
     }
 }

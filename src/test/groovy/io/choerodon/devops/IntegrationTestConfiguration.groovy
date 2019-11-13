@@ -1,17 +1,19 @@
 package io.choerodon.devops
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import io.choerodon.asgard.saga.producer.TransactionalProducer
 import io.choerodon.core.exception.CommonException
 import io.choerodon.core.oauth.CustomUserDetails
+import io.choerodon.devops.app.service.AgentPodService
+import io.choerodon.devops.app.service.GitlabGroupMemberService
 import io.choerodon.devops.app.service.ProjectConfigHarborService
-import io.choerodon.devops.infra.common.util.EnvUtil
-import io.choerodon.devops.infra.common.util.GitUtil
+import io.choerodon.devops.infra.feign.operator.BaseServiceClientOperator
+import io.choerodon.devops.infra.feign.operator.GitlabServiceClientOperator
+import io.choerodon.devops.infra.handler.ClusterConnectionHandler
+import io.choerodon.devops.infra.util.GitUtil
 import io.choerodon.liquibase.LiquibaseConfig
 import io.choerodon.liquibase.LiquibaseExecutor
-import io.choerodon.websocket.helper.CommandSender
-import io.choerodon.websocket.helper.EnvListener
-import io.choerodon.websocket.process.SocketMsgDispatcher
-import org.apache.http.client.config.RequestConfig
+import org.powermock.api.mockito.PowerMockito
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.test.context.TestConfiguration
@@ -61,6 +63,9 @@ class IntegrationTestConfiguration extends WebSecurityConfigurerAdapter {
     @Value('${spring.datasource.password}')
     String dataBasePassword
 
+    @Value('${liquibase.init:true}')
+    boolean isToExecuteLiquibase
+
     @Autowired
     TestRestTemplate testRestTemplate
 
@@ -70,21 +75,33 @@ class IntegrationTestConfiguration extends WebSecurityConfigurerAdapter {
     final ObjectMapper objectMapper = new ObjectMapper()
 
     @Primary
-    @Bean("mockSocketMsgDispatcher")
-    SocketMsgDispatcher socketMsgDispatcher() {
-        detachedMockFactory.Mock(SocketMsgDispatcher)
+    @Bean("mockAgentPodInfoService")
+    AgentPodService agentPodService() {
+        PowerMockito.mock(AgentPodService)
     }
 
     @Primary
-    @Bean("mockEnvUtil")
-    EnvUtil envUtil() {
-        detachedMockFactory.Mock(EnvUtil)
+    @Bean("mockBaseServiceClientOperator")
+    BaseServiceClientOperator baseServiceClientOperator() {
+        PowerMockito.mock(BaseServiceClientOperator)
     }
 
     @Primary
-    @Bean("mockEnvListener")
-    EnvListener envListener() {
-        detachedMockFactory.Mock(EnvListener)
+    @Bean("mockGitlabServiceClientOperator")
+    GitlabServiceClientOperator gitlabServiceClientOperator() {
+        PowerMockito.mock(GitlabServiceClientOperator)
+    }
+
+    @Primary
+    @Bean("mockGitlabGroupMemberService")
+    GitlabGroupMemberService gitlabGroupMemberService() {
+        PowerMockito.mock(GitlabGroupMemberService)
+    }
+
+    @Primary
+    @Bean("mockClusterConnectionHandler")
+    ClusterConnectionHandler clusterConnectionHandler() {
+        PowerMockito.mock(ClusterConnectionHandler)
     }
 
     @Bean("mockGitUtil")
@@ -93,10 +110,10 @@ class IntegrationTestConfiguration extends WebSecurityConfigurerAdapter {
         detachedMockFactory.Mock(GitUtil)
     }
 
-    @Bean("mockCommandSender")
+    @Bean("mockTransactionalProducer")
     @Primary
-    CommandSender commandSender() {
-        detachedMockFactory.Mock(CommandSender)
+    TransactionalProducer transactionalProducer() {
+        detachedMockFactory.Mock(TransactionalProducer)
     }
 
     @Bean("mockProjectConfigHarborService")
@@ -107,22 +124,26 @@ class IntegrationTestConfiguration extends WebSecurityConfigurerAdapter {
 
     @PostConstruct
     void init() {
-        liquibaseExecutor.execute()
-        initSqlFunction()
+        if (isToExecuteLiquibase) {
+            liquibaseExecutor.execute()
+        }
+//        initSqlFunction()
         setTestRestTemplateJWT()
     }
 
     void initSqlFunction() {
-        //连接H2数据库
-        Class.forName("org.h2.Driver")
+        if (dataBaseUrl.contains("jdbc:h2")) {
+            //连接H2数据库
+            Class.forName("org.h2.Driver")
 //        Class.forName("com.mysql.jdbc.Driver")
-        Connection conn = DriverManager.
-                getConnection(dataBaseUrl, dataBaseUsername, dataBasePassword)
-        Statement stat = conn.createStatement()
-        //创建 SQL的IF函数，用JAVA的方法代替函数
-        stat.execute("CREATE ALIAS IF NOT EXISTS BINARY FOR \"io.choerodon.devops.infra.common.util.MybatisFunctionTestUtil.binaryFunction\"")
-        stat.close()
-        conn.close()
+            Connection conn = DriverManager.
+                    getConnection(dataBaseUrl, dataBaseUsername, dataBasePassword)
+            Statement stat = conn.createStatement()
+            //创建 SQL的IF函数，用JAVA的方法代替函数
+            stat.execute("CREATE ALIAS IF NOT EXISTS BINARY FOR \"io.choerodon.devops.infra.util.MybatisFunctionTestUtil.binaryFunction\"")
+            stat.close()
+            conn.close()
+        }
     }
 
     private void setTestRestTemplateJWT() {
@@ -144,13 +165,11 @@ class IntegrationTestConfiguration extends WebSecurityConfigurerAdapter {
         defaultUserDetails.setOrganizationId(0L)
         defaultUserDetails.setLanguage('zh_CN')
         defaultUserDetails.setTimeZone('CCT')
-        String jwtToken = null
         try {
-            jwtToken = 'Bearer ' + JwtHelper.encode(objectMapper.writeValueAsString(defaultUserDetails), signer).getEncoded()
+            return 'Bearer ' + JwtHelper.encode(objectMapper.writeValueAsString(defaultUserDetails), signer).getEncoded()
         } catch (IOException e) {
             throw new CommonException(e)
         }
-        return jwtToken
     }
 
     /**

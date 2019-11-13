@@ -10,4 +10,12 @@ databaseChangeLog(logicalFilePath: 'dba/devops_app_share_resource.groovy') {
             column(name: 'project_id', type: 'BIGINT UNSIGNED', remarks: '项目ID')
         }
     }
+
+    changeSet(author: 'sheep', id: '2019-8-05-rename-table') {
+        renameTable(newTableName: 'devops_app_service_share_resource', oldTableName: 'devops_app_share_resource')
+    }
+
+    changeSet(author: 'scp', id: '2019-08-08-delete-table') {
+        dropTable(tableName: "devops_app_service_share_resource")
+    }
 }

@@ -1,7 +1,7 @@
 package io.choerodon.devops.app.service;
 
-import io.choerodon.devops.domain.application.event.HarborPayload;
-import io.choerodon.devops.infra.dataobject.harbor.User;
+import io.choerodon.devops.app.eventhandler.payload.HarborPayload;
+import io.choerodon.devops.infra.feign.HarborClient;
 
 /**
  * Created with IntelliJ IDEA.
@@ -11,6 +11,8 @@ import io.choerodon.devops.infra.dataobject.harbor.User;
  * Description:
  */
 public interface HarborService {
-    void createHarbor(HarborPayload harborPayload);
 
+    void createHarborForProject(HarborPayload harborPayload);
+
+    void createHarbor(HarborClient harborClient, Long projectId, String projectCode, Boolean createUser,Boolean harborPrivate);
 }

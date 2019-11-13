@@ -1,6 +1,6 @@
 package io.choerodon.devops.infra.mapper;
 
-import io.choerodon.devops.infra.dataobject.AppShareResourceDO;
+import io.choerodon.devops.infra.dto.AppServiceShareResourceDTO;
 import io.choerodon.mybatis.common.Mapper;
 
 /**
@@ -8,6 +8,6 @@ import io.choerodon.mybatis.common.Mapper;
  * Date:  15:13 2019/6/28
  * Description:
  */
-public interface AppShareResourceMapper extends Mapper<AppShareResourceDO> {
+public interface AppShareResourceMapper extends Mapper<AppServiceShareResourceDTO> {
 
 }

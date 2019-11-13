@@ -1,24 +1,7 @@
 package io.choerodon.devops.api.controller.v1
 
-import io.choerodon.devops.DependencyInjectUtil
-import io.choerodon.devops.IntegrationTestConfiguration
-import io.choerodon.devops.domain.application.entity.ProjectE
-import io.choerodon.devops.domain.application.entity.UserAttrE
-import io.choerodon.devops.domain.application.repository.ApplicationVersionRepository
-import io.choerodon.devops.domain.application.repository.IamRepository
-import io.choerodon.devops.domain.application.valueobject.Organization
-import io.choerodon.devops.infra.common.util.FileUtil
-import io.choerodon.devops.infra.dataobject.ApplicationDO
-import io.choerodon.devops.infra.dataobject.ApplicationVersionDO
-import io.choerodon.devops.infra.dataobject.ApplicationVersionReadmeDO
-import io.choerodon.devops.infra.dataobject.ApplicationVersionValueDO
-import io.choerodon.devops.infra.dataobject.iam.OrganizationDO
-import io.choerodon.devops.infra.dataobject.iam.ProjectDO
-import io.choerodon.devops.infra.feign.IamServiceClient
-import io.choerodon.devops.infra.mapper.ApplicationMapper
-import io.choerodon.devops.infra.mapper.ApplicationVersionMapper
-import io.choerodon.devops.infra.mapper.ApplicationVersionReadmeMapper
-import io.choerodon.devops.infra.mapper.ApplicationVersionValueMapper
+import static org.springframework.boot.test.context.SpringBootTest.WebEnvironment.RANDOM_PORT
+
 import org.mockito.Mockito
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
@@ -34,7 +17,23 @@ import spock.lang.Specification
 import spock.lang.Stepwise
 import spock.lang.Subject
 
-import static org.springframework.boot.test.context.SpringBootTest.WebEnvironment.RANDOM_PORT
+import io.choerodon.devops.DependencyInjectUtil
+import io.choerodon.devops.IntegrationTestConfiguration
+import io.choerodon.devops.api.vo.ProjectVO
+import io.choerodon.devops.app.service.AppServiceVersionService
+import io.choerodon.devops.app.service.IamService
+import io.choerodon.devops.infra.dto.AppServiceDTO
+import io.choerodon.devops.infra.dto.AppServiceVersionDTO
+import io.choerodon.devops.infra.dto.AppServiceVersionReadmeDTO
+import io.choerodon.devops.infra.dto.AppServiceVersionValueDTO
+import io.choerodon.devops.infra.dto.iam.OrganizationDTO
+import io.choerodon.devops.infra.dto.iam.ProjectDTO
+import io.choerodon.devops.infra.feign.BaseServiceClient
+import io.choerodon.devops.infra.mapper.AppServiceMapper
+import io.choerodon.devops.infra.mapper.AppServiceVersionMapper
+import io.choerodon.devops.infra.mapper.AppServiceVersionReadmeMapper
+import io.choerodon.devops.infra.mapper.AppServiceVersionValueMapper
+import io.choerodon.devops.infra.util.FileUtil
 
 /**
  * Created by n!Ck
@@ -52,74 +51,68 @@ class CiControllerSpec extends Specification {
     private TestRestTemplate restTemplate
 
     @Autowired
-    private ApplicationMapper applicationMapper
+    private AppServiceMapper applicationMapper
     @Autowired
-    private ApplicationVersionMapper applicationVersionMapper
+    private AppServiceVersionMapper applicationVersionMapper
     @Autowired
     private
-    ApplicationVersionReadmeMapper applicationVersionReadmeMapper
+    AppServiceVersionReadmeMapper applicationVersionReadmeMapper
     @Autowired
-    private ApplicationVersionValueMapper applicationVersionValueMapper
+    private AppServiceVersionValueMapper applicationVersionValueMapper
     @Autowired
-    private ApplicationVersionRepository applicationVersionRepository
+    private AppServiceVersionService applicationVersionRepository
 
     @Autowired
-    private IamRepository iamRepository
+    private IamService iamRepository
 
-    IamServiceClient iamServiceClient = Mockito.mock(IamServiceClient.class)
+    BaseServiceClient iamServiceClient = Mockito.mock(BaseServiceClient.class)
 
     @Shared
-    Organization organization = new Organization()
-    @Shared
-    ProjectE projectE = new ProjectE()
-    @Shared
-    UserAttrE userAttrE = new UserAttrE()
+    ProjectVO projectE = new ProjectVO()
     @Shared
     Long project_id = 1L
     @Shared
     Long init_id = 1L
     @Shared
-    ApplicationDO applicationDO
+    AppServiceDTO appServiceDTO
 
     def setupSpec() {
-        given:
-        organization.setId(init_id)
-        organization.setCode("org")
+//        given:
+//        organization.setId(init_id)
+//        organization.setCode("org")
 
         projectE.setId(init_id)
         projectE.setCode("pro")
-        projectE.setOrganization(organization)
+        projectE.setOrganizationId(init_id)
 
-        userAttrE.setIamUserId(init_id)
-        userAttrE.setGitlabUserId(init_id)
 
-        applicationDO = new ApplicationDO()
-        applicationDO.setId(1L)
-        applicationDO.setProjectId(project_id)
-        applicationDO.setToken("token")
-        applicationDO.setCode("app")
+        appServiceDTO = new AppServiceDTO()
+        appServiceDTO.setId(1L)
+        appServiceDTO.setProjectId(project_id)
+        appServiceDTO.setToken("token")
+        appServiceDTO.setCode("app")
     }
 
     def setup() {
-        DependencyInjectUtil.setAttribute(iamRepository, "iamServiceClient", iamServiceClient)
+        DependencyInjectUtil.setAttribute(iamRepository, "baseServiceClient", iamServiceClient)
 
-        ProjectDO projectDO = new ProjectDO()
-        projectDO.setId(1L)
-        projectDO.setCode("pro")
-        projectDO.setOrganizationId(1L)
-        ResponseEntity<ProjectDO> responseEntity = new ResponseEntity<>(projectDO, HttpStatus.OK)
+        ProjectDTO projectDTO = new ProjectDTO()
+        projectDTO.setId(1L)
+        projectDTO.setCode("pro")
+        projectDTO.setOrganizationId(1L)
+        ResponseEntity<ProjectDTO> responseEntity = new ResponseEntity<>(projectDTO, HttpStatus.OK)
         Mockito.doReturn(responseEntity).when(iamServiceClient).queryIamProject(1L)
 
-        OrganizationDO organizationDO = new OrganizationDO()
-        organizationDO.setId(1L)
-        organizationDO.setCode("org")
-        ResponseEntity<OrganizationDO> responseEntity1 = new ResponseEntity<>(organizationDO, HttpStatus.OK)
+        OrganizationDTO organizationDTO = new OrganizationDTO()
+        organizationDTO.setId(1L)
+        organizationDTO.setCode("org")
+        ResponseEntity<OrganizationDTO> responseEntity1 = new ResponseEntity<>(organizationDTO, HttpStatus.OK)
         Mockito.doReturn(responseEntity1).when(iamServiceClient).queryOrganizationById(1L)
     }
 
     def "QueryFile"() {
         given: '创建应用'
-        applicationMapper.insert(applicationDO)
+        applicationMapper.insert(appServiceDTO)
 
         when: '应用查询ci脚本文件'
         def str = restTemplate.getForObject("/ci?token=token", String.class)
@@ -130,12 +123,12 @@ class CiControllerSpec extends Specification {
 
     def "Create"() {
         given: '创建应用版本'
-        ApplicationVersionDO applicationVersionDO = new ApplicationVersionDO()
-        applicationVersionDO.setId(1L)
-        applicationVersionDO.setAppId(init_id)
-        applicationVersionDO.setVersion("oldVersion")
-        applicationVersionDO.setReadmeValueId(init_id)
-        applicationVersionMapper.insert(applicationVersionDO)
+        AppServiceVersionDTO appServiceVersionDTO = new AppServiceVersionDTO()
+        appServiceVersionDTO.setId(1L)
+        appServiceVersionDTO.setAppServiceId(init_id)
+        appServiceVersionDTO.setVersion("oldVersion")
+        appServiceVersionDTO.setReadmeValueId(init_id)
+        applicationVersionMapper.insert(appServiceVersionDTO)
 
         FileSystemResource resource = new FileSystemResource(new File("src/test/resources/key.tar.gz"))
         MultiValueMap<String, Object> file = new LinkedMultiValueMap<>()
@@ -152,30 +145,30 @@ class CiControllerSpec extends Specification {
         yamlFile.getName() == "values.yaml"
 
         // 删除app
-        List<ApplicationDO> list = applicationMapper.selectAll()
+        List<AppServiceDTO> list = applicationMapper.selectAll()
         if (list != null && !list.isEmpty()) {
-            for (ApplicationDO e : list) {
+            for (AppServiceDTO e : list) {
                 applicationMapper.delete(e)
             }
         }
         // 删除appVersion
-        List<ApplicationVersionDO> list1 = applicationVersionMapper.selectAll()
+        List<AppServiceVersionDTO> list1 = applicationVersionMapper.selectAll()
         if (list1 != null && !list1.isEmpty()) {
-            for (ApplicationVersionDO e : list1) {
+            for (AppServiceVersionDTO e : list1) {
                 applicationVersionMapper.delete(e)
             }
         }
         // 删除appVersionReadme
-        List<ApplicationVersionReadmeDO> list2 = applicationVersionReadmeMapper.selectAll()
+        List<AppServiceVersionReadmeDTO> list2 = applicationVersionReadmeMapper.selectAll()
         if (list2 != null && !list2.isEmpty()) {
-            for (ApplicationVersionReadmeDO e : list2) {
+            for (AppServiceVersionReadmeDTO e : list2) {
                 applicationVersionReadmeMapper.delete(e)
             }
         }
         // 删除appVersionValue
-        List<ApplicationVersionValueDO> list3 = applicationVersionValueMapper.selectAll()
+        List<AppServiceVersionValueDTO> list3 = applicationVersionValueMapper.selectAll()
         if (list3 != null && !list3.isEmpty()) {
-            for (ApplicationVersionValueDO e : list3) {
+            for (AppServiceVersionValueDTO e : list3) {
                 applicationVersionValueMapper.delete(e)
             }
         }

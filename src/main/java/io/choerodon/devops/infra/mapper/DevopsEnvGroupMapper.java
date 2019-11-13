@@ -2,10 +2,10 @@ package io.choerodon.devops.infra.mapper;
 
 import java.util.List;
 
-import io.choerodon.mybatis.common.Mapper;
 import org.apache.ibatis.annotations.Param;
 
-import io.choerodon.devops.infra.dataobject.DevopsEnvGroupDO;
+import io.choerodon.devops.infra.dto.DevopsEnvGroupDTO;
+import io.choerodon.mybatis.common.Mapper;
 
 /**
  * Creator: Runge
@@ -13,6 +13,11 @@ import io.choerodon.devops.infra.dataobject.DevopsEnvGroupDO;
  * Time: 14:17
  * Description:
  */
-public interface DevopsEnvGroupMapper extends Mapper<DevopsEnvGroupDO> {
-    void sortGroupInProject(@Param("projectId") Long projectId, @Param("envGroupIds") List<Long> envGroupIds);
+public interface DevopsEnvGroupMapper extends Mapper<DevopsEnvGroupDTO> {
+    /**
+     * 查出在集合中的环境组
+     * @param ids
+     * @return
+     */
+    List<DevopsEnvGroupDTO> listByIdList(@Param("ids") List<Long> ids);
 }

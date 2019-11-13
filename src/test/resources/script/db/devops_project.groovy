@@ -40,6 +40,7 @@ databaseChangeLog(logicalFilePath: 'dba/devops_project.groovy') {
         renameColumn(columnDataType: 'BIGINT UNSIGNED', newColumnName: 'devops_env_group_id', oldColumnName: 'env_group_id', remarks: 'gitlab env group id', tableName: 'devops_project')
     }
 
+
     changeSet(author: 'younger', id: '2019-04-30-add-column') {
         addColumn(tableName: 'devops_project') {
             column(name: 'harbor_project_user_name', type: 'VARCHAR(50)', afterColumn: 'devops_env_group_id',remarks: 'harbor项目默认用户')

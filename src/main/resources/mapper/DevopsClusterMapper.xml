@@ -2,10 +2,10 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
 
 <mapper namespace="io.choerodon.devops.infra.mapper.DevopsClusterMapper">
-    <select id="listByProjectId" resultType="io.choerodon.devops.infra.dataobject.DevopsClusterDO">
+    <select id="listByProjectId" resultType="io.choerodon.devops.infra.dto.DevopsClusterDTO">
         select dc.id,dc.`name` from devops_cluster dc where dc.skip_check_project_permission is true and
         dc.organization_id = #{organizationId}
-        UNION
+        UNION ALL
         select dc.id,dc.`name` from devops_cluster dc
         join devops_cluster_pro_rel dcp on dc.id = dcp.cluster_id
         where dcp.project_id = #{projectId}
@@ -15,51 +15,68 @@
         UPDATE devops_cluster dc set dc.skip_check_project_permission = #{skipCheckPro} where dc.id = #{clusterId}
     </update>
 
-    <select id="listClusters" resultType="io.choerodon.devops.infra.dataobject.DevopsClusterDO">
+    <select id="listClusters" resultType="io.choerodon.devops.infra.dto.DevopsClusterDTO">
         SELECT
         *
         FROM devops_cluster dc
-        where dc.organization_id = #{organizationId}
+        where dc.project_id = #{projectId}
         <include refid="sqlparam"/>
     </select>
 
     <sql id="sqlparam">
         <if test='searchParam != null'>
-            <if test='searchParam.code != null and searchParam.code.size > 0'>
+            <if test='searchParam.code != null and searchParam.code.length > 0'>
                 AND
-                <foreach collection="searchParam.code" item="code" open="(" separator=" OR " close=")">
-                    dc.code LIKE CONCAT(CONCAT('%', #{code, jdbcType=VARCHAR}),'%')
-                </foreach>
+                    dc.code LIKE CONCAT(CONCAT('%', #{searchParam.code, jdbcType=VARCHAR}),'%')
             </if>
-            <if test='searchParam.name != null and searchParam.name.size > 0'>
+            <if test='searchParam.name != null and searchParam.name.length > 0'>
                 AND
-                <foreach collection="searchParam.name" item="name" open="(" separator=" OR " close=")">
-                    dc.name LIKE CONCAT(CONCAT('%', #{name, jdbcType=VARCHAR}),'%')
-                </foreach>
+                    dc.name LIKE CONCAT(CONCAT('%', #{searchParam.name, jdbcType=VARCHAR}),'%')
             </if>
-            <if test='searchParam.description != null and searchParam.description.size > 0'>
+            <if test='searchParam.description != null and searchParam.description.length > 0'>
                 AND
-                <foreach collection="searchParam.description" item="description" open="(" separator=" OR " close=")">
-                    dc.name LIKE CONCAT(CONCAT('%', #{description, jdbcType=VARCHAR}),'%')
-                </foreach>
+                    dc.name LIKE CONCAT(CONCAT('%', #{searchParam.description, jdbcType=VARCHAR}),'%')
             </if>
         </if>
-        <if test='param != null and param != ""'>
-            AND (dc.code LIKE CONCAT(CONCAT('%', #{param, jdbcType=VARCHAR}),'%')
-            OR dc.name LIKE CONCAT(CONCAT('%', #{param, jdbcType=VARCHAR}),'%')
-            OR dc.description LIKE CONCAT(CONCAT('%', #{param, jdbcType=VARCHAR}),'%')
-            )
+        <if test='params != null and params.size > 0'>
+            AND
+            <foreach collection="params" item="param" open="(" separator=" OR " close=")">
+                (dc.code LIKE CONCAT(CONCAT('%', #{param, jdbcType=VARCHAR}),'%')
+                OR dc.name LIKE CONCAT(CONCAT('%', #{param, jdbcType=VARCHAR}),'%')
+                OR dc.description LIKE CONCAT(CONCAT('%', #{param, jdbcType=VARCHAR}),'%')
+                )
+            </foreach>
         </if>
     </sql>
 
-    <select id="pageQueryPodsByNodeName" resultType="io.choerodon.devops.infra.dataobject.DevopsEnvPodDO">
+    <select id="pageQueryPodsByNodeName" resultType="io.choerodon.devops.infra.dto.DevopsEnvPodDTO">
         SELECT pod.*
         FROM devops_env_pod pod
-        INNER JOIN devops_app_instance instance ON pod.app_instance_id = instance.id
+        INNER JOIN devops_app_service_instance instance ON pod.instance_id = instance.id
         INNER JOIN devops_env env ON instance.env_id = env.id
         INNER JOIN devops_cluster cluster ON env.cluster_id = cluster.id
         WHERE cluster.id = #{clusterId}
           AND pod.node_name = #{nodeName}
+        <if test='searchParam != null'>
+            <if test='searchParam.name != null and searchParam.name.length > 0'>
+                AND pod.name LIKE CONCAT(CONCAT('%', #{searchParam.name, jdbcType=VARCHAR}),'%')
+            </if>
+            <if test='searchParam.namespace != null and searchParam.namespace.length > 0'>
+                AND pod.namespace LIKE CONCAT(CONCAT('%', #{searchParam.namespace, jdbcType=VARCHAR}),'%')
+            </if>
+            <if test='searchParam.status != null and searchParam.status.length > 0'>
+                AND pod.status LIKE CONCAT(CONCAT('%', #{searchParam.status, jdbcType=VARCHAR}),'%')
+            </if>
+        </if>
+        <if test='params != null and params.size > 0'>
+            AND
+            <foreach collection="params" item="param" open="(" separator=" OR " close=")">
+                (pod.name LIKE CONCAT(CONCAT('%', #{param, jdbcType=VARCHAR}),'%')
+                OR pod.namespace LIKE CONCAT(CONCAT('%', #{param, jdbcType=VARCHAR}),'%')
+                OR pod.status LIKE CONCAT(CONCAT('%', #{param, jdbcType=VARCHAR}),'%')
+                )
+            </foreach>
+        </if>
     </select>
 
     <update id="updateProjectId">
@@ -68,5 +85,11 @@
         WHERE
             dc.organization_id = #{orgId}
     </update>
+
+    <select id="listAllClustersToMigrate" resultType="io.choerodon.devops.infra.dto.DevopsClusterDTO">
+        SELECT devops_cluster.*
+        FROM devops_cluster
+        WHERE project_id IS NULL
+    </select>
 
 </mapper>

@@ -2,9 +2,7 @@ package io.choerodon.devops.infra.feign;
 
 import java.util.Map;
 
-import io.choerodon.devops.infra.dataobject.harbor.*;
-import org.springframework.security.core.parameters.P;
-import org.springframework.web.bind.annotation.PutMapping;
+import io.choerodon.devops.infra.dto.harbor.*;
 import retrofit2.Call;
 import retrofit2.http.*;
 import java.util.*;
@@ -48,4 +46,11 @@ public interface HarborClient {
 
     @DELETE("api/projects/{project_id}/members/{user_id}")
     Call<Void> deleteLowVersionMember(@Path("project_id") Integer projectId, @Path("user_id") Integer userId);
+
+    @GET("api/projects/{project_id}/members")
+    Call<List<ProjectMember>> getProjectMembers(@Path("project_id")Integer projectId, @Query("entityname") String entityname);
+
+    @POST("/projects/{project_id}/robots")
+    Call<List<ProjectMember>> createRobots(@Body Project harborProject);
+
 }

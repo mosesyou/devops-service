@@ -5,7 +5,7 @@ import java.util.List;
 import io.choerodon.mybatis.common.Mapper;
 import org.apache.ibatis.annotations.Param;
 
-import io.choerodon.devops.infra.dataobject.DevopsMergeRequestDO;
+import io.choerodon.devops.infra.dto.DevopsMergeRequestDTO;
 
 /**
  * Created with IntelliJ IDEA.
@@ -14,13 +14,13 @@ import io.choerodon.devops.infra.dataobject.DevopsMergeRequestDO;
  * Time: 14:31
  * Description:
  */
-public interface DevopsMergeRequestMapper extends Mapper<DevopsMergeRequestDO> {
+public interface DevopsMergeRequestMapper extends Mapper<DevopsMergeRequestDTO> {
+    List<DevopsMergeRequestDTO> getByProjectIdAndState(@Param("projectId") Integer gitLabProjectId,
+                                                       @Param("state") String state);
 
-    Integer queryByAppIdAndGitlabId(@Param("projectId") Long applicationId,
-                                    @Param("gitlabMergeRequestId") Long gitlabMergeRequestId);
+    List<DevopsMergeRequestDTO> listBySourceBranch(@Param("projectId")Integer gitLabProjectId, @Param("branchName") String branchName);
 
-    List<DevopsMergeRequestDO> getByProjectIdAndState(@Param("projectId") Integer gitLabProjectId,
-                                                      @Param("state") String state);
+    DevopsMergeRequestDTO countMergeRequest(@Param("projectId") Integer gitlabProjectId);
 
-    List<DevopsMergeRequestDO> listByProjectIdAndBranch(@Param("projectId")Integer gitLabProjectId, @Param("branchName") String branchName);
+    void deleteByProjectId(@Param("projectId")int projectId);
 }

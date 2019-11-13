@@ -1,9 +1,9 @@
 package io.choerodon.devops.api.controller.v1
 
+import com.alibaba.fastjson.JSONArray
 import io.choerodon.devops.IntegrationTestConfiguration
-import io.choerodon.devops.api.dto.DevopsEnvGroupDTO
-import io.choerodon.devops.infra.dataobject.DevopsEnvGroupDO
-import io.choerodon.devops.infra.dataobject.DevopsEnvironmentDO
+import io.choerodon.devops.api.vo.DevopsEnvGroupVO
+import io.choerodon.devops.infra.dto.DevopsEnvGroupDTO
 import io.choerodon.devops.infra.mapper.DevopsEnvGroupMapper
 import io.choerodon.devops.infra.mapper.DevopsEnvironmentMapper
 import org.springframework.beans.factory.annotation.Autowired
@@ -29,72 +29,117 @@ import static org.springframework.boot.test.context.SpringBootTest.WebEnvironmen
 @Subject(DevopsEnvGroupController)
 @Stepwise
 class DevopsEnvGroupControllerSpec extends Specification {
-
-    private static flag = 0
+    private String rootUrl = "/v1/projects/{project_id}/env_groups"
 
     @Autowired
     private TestRestTemplate restTemplate
     @Autowired
-    DevopsEnvGroupMapper devopsEnvGroupMapper
+    private DevopsEnvGroupMapper devopsEnvGroupMapper
     @Autowired
-    DevopsEnvironmentMapper devopsEnvironmentMapper
+    private DevopsEnvironmentMapper devopsEnvironmentMapper
 
     @Shared
-    DevopsEnvGroupDO devopsEnvGroupDO = new DevopsEnvGroupDO()
+    private DevopsEnvGroupDTO devopsEnvGroupDO = new DevopsEnvGroupDTO()
     @Shared
-    DevopsEnvGroupDO devopsEnvGroupDO1 = new DevopsEnvGroupDO()
+    private DevopsEnvGroupDTO devopsEnvGroupDO1 = new DevopsEnvGroupDTO()
 
-    def setupSpec() {
-        devopsEnvGroupDO.setId(1L)
-        devopsEnvGroupDO.setName("test")
-        devopsEnvGroupDO.setProjectId(1L)
-        devopsEnvGroupDO.setSequence(1L)
-        devopsEnvGroupDO.setObjectVersionNumber(1L)
+    @Shared
+    private boolean isToInit = true
+    @Shared
+    private boolean isToClean = false
 
-        devopsEnvGroupDO1.setId(2L)
-        devopsEnvGroupDO1.setName("test1")
-        devopsEnvGroupDO1.setProjectId(1L)
-        devopsEnvGroupDO1.setSequence(2L)
-        devopsEnvGroupDO1.setObjectVersionNumber(1L)
+    private static final PROJECT_ID = 1L
 
+    def setup() {
+        if (isToInit) {
+            devopsEnvGroupDO.setId(1L)
+            devopsEnvGroupDO.setName("test")
+            devopsEnvGroupDO.setProjectId(PROJECT_ID)
+
+            devopsEnvGroupDO1.setId(2L)
+            devopsEnvGroupDO1.setName("test1")
+            devopsEnvGroupDO1.setProjectId(PROJECT_ID)
+
+            devopsEnvGroupMapper.insert(devopsEnvGroupDO)
+            devopsEnvGroupMapper.insert(devopsEnvGroupDO1)
+        }
+    }
+
+    def cleanup() {
+        if (isToClean) {
+            devopsEnvGroupMapper.delete(null)
+        }
     }
 
     def "Create"() {
         given: '创建环境组'
-        devopsEnvGroupMapper.insert(devopsEnvGroupDO)
-        devopsEnvGroupMapper.insert(devopsEnvGroupDO1)
+        isToInit = false
+        def url = rootUrl + "?name={name}"
+        def groupName = "test-create"
+
+        Map<String, Object> params = new HashMap<>()
+        params.put("name", groupName)
+        params.put("project_id", PROJECT_ID)
 
         when: '项目下创建环境组'
-        def envDTO = restTemplate.postForObject("/v1/projects/1/env_groups?devopsEnvGroupName=test2", null, DevopsEnvGroupDTO.class)
+        DevopsEnvGroupVO groupVO = restTemplate.postForObject(url, null, DevopsEnvGroupVO.class, params)
 
         then: '校验返回结果'
-        envDTO["projectId"] == 1
+        groupVO.getName() == groupName
+        groupVO.getId() != null
+        devopsEnvGroupMapper.selectByPrimaryKey(groupVO.getId()) != null
     }
 
     def "Update"() {
-        given: '初始化更新DTO类'
-        DevopsEnvGroupDTO devopsEnvGroupDTO = new DevopsEnvGroupDTO()
-        devopsEnvGroupDTO.setId(1L)
-        devopsEnvGroupDTO.setName("name")
+        given: '准备'
+        def updateName = "test-update"
+        devopsEnvGroupDO.setName(updateName)
+
+        Map<String, Object> params = new HashMap<>()
+        params.put("project_id", PROJECT_ID)
 
         when: '项目下更新环境组'
-        restTemplate.put("/v1/projects/1/env_groups", devopsEnvGroupDTO, DevopsEnvGroupDTO.class)
+        restTemplate.put(rootUrl, devopsEnvGroupDO, params)
 
         then: '校验更新结果'
-        devopsEnvGroupMapper.selectByPrimaryKey(1L)["name"] == "name"
+        devopsEnvGroupMapper.selectByPrimaryKey(devopsEnvGroupDO.getId()).getName() == updateName
     }
 
     def "ListByProject"() {
+        given: '准备'
+        def url = rootUrl + "/list_by_project"
+        Map<String, Object> params = new HashMap<>()
+        params.put("project_id", PROJECT_ID)
+
         when: '项目下查询环境组'
-        def devopsEnvGroups = restTemplate.getForObject("/v1/projects/1/env_groups", List.class)
+        def devopsEnvGroups = JSONArray.parseArray(restTemplate.getForObject(url, String.class, params), DevopsEnvGroupVO)
 
         then: '校验返回结果'
+        devopsEnvGroups != null
         devopsEnvGroups.size() == 3
     }
 
     def "CheckName"() {
-        when: '校验环境组名唯一性'
-        def isUnique = restTemplate.getForObject("/v1/projects/1/env_groups/checkName?name=test", Boolean.class)
+        given: "准备"
+        def url = rootUrl + "/check_name?name={name}"
+        Map<String, Object> params = new HashMap<>()
+        params.put("name", devopsEnvGroupDO.getName())
+        params.put("project_id", PROJECT_ID)
+
+        when: '校验环境组名唯一性，除开组自身'
+        def isUnique = restTemplate.getForObject(url, Boolean.class, params)
+
+        then: '返回值'
+        !isUnique
+
+
+        when: '校验环境组名唯一性，除开组自身'
+        url = rootUrl + "/check_name?name={name}&group_id={group_id}"
+        params = new HashMap<>()
+        params.put("name", devopsEnvGroupDO.getName())
+        params.put("project_id", PROJECT_ID)
+        params.put("group_id", devopsEnvGroupDO.getId())
+        isUnique = restTemplate.getForObject(url, Boolean.class, params)
 
         then: '返回值'
         isUnique
@@ -102,45 +147,16 @@ class DevopsEnvGroupControllerSpec extends Specification {
 
     def "Delete"() {
         given: '创建环境DO类'
-        DevopsEnvironmentDO devopsEnvironmentDO = new DevopsEnvironmentDO()
-        devopsEnvironmentDO.setId(1L)
-        devopsEnvironmentDO.setProjectId(1L)
-        devopsEnvironmentDO.setActive(true)
-        devopsEnvironmentDO.setGitlabEnvProjectId(1L)
-        devopsEnvironmentDO.setSequence(1L)
-        devopsEnvironmentDO.setCode("env")
-        devopsEnvironmentDO.setDevopsEnvGroupId(1L)
-        DevopsEnvironmentDO devopsEnvironmentDO1 = new DevopsEnvironmentDO()
-        devopsEnvironmentDO1.setId(2L)
-        devopsEnvironmentDO1.setProjectId(1L)
-        devopsEnvironmentDO1.setActive(true)
-        devopsEnvironmentDO1.setCode("env1")
-        devopsEnvironmentDO1.setGitlabEnvProjectId(1L)
-        devopsEnvironmentDO1.setSequence(2L)
-        devopsEnvironmentDO1.setDevopsEnvGroupId(1L)
-        devopsEnvironmentMapper.insert(devopsEnvironmentDO)
-        devopsEnvironmentMapper.insert(devopsEnvironmentDO1)
+        isToClean = true
+        def url = rootUrl + "/{group_id}"
+        Map<String, Object> params = new HashMap<>()
+        params.put("group_id", devopsEnvGroupDO.getId())
+        params.put("project_id", PROJECT_ID)
 
         when: '环境组删除'
-        restTemplate.delete("/v1/projects/1/env_groups/1")
+        restTemplate.delete(url, params)
 
         then: '验证是否删除'
-        devopsEnvGroupMapper.selectByPrimaryKey(1L) == null
-
-        and: '清理数据'
-        // 删除envGroup
-        List<DevopsEnvGroupDO> list = devopsEnvGroupMapper.selectAll()
-        if (list != null && !list.isEmpty()) {
-            for (DevopsEnvGroupDO e : list) {
-                devopsEnvGroupMapper.delete(e)
-            }
-        }
-        // 删除env
-        List<DevopsEnvironmentDO> list1 = devopsEnvironmentMapper.selectAll()
-        if (list1 != null && !list1.isEmpty()) {
-            for (DevopsEnvironmentDO e : list1) {
-                devopsEnvironmentMapper.delete(e)
-            }
-        }
+        devopsEnvGroupMapper.selectByPrimaryKey(devopsEnvGroupDO.getId()) == null
     }
 }

@@ -10,12 +10,15 @@ target/
 .springBeans
 .sts4-cache
 
+### unit test
+gitops/
+application-localtest.yml
+
 ### IntelliJ IDEA ###
 .idea
 *.iws
 *.iml
 *.ipr
-.project
 .vscode
 
 ### NetBeans ###
@@ -25,7 +28,7 @@ nbbuild/
 dist/
 nbdist/
 .nb-gradle/
-application-default.yml
+application-default.*
 init-local-database.sh
 values_yaml.spec
 
@@ -40,8 +43,9 @@ choerodon_temp/*
 
 ### native temp files
 deployfile
-gitops
 tmp
+
+~$micro-service-init-data.xlsx
 
 ### front ###
 
@@ -58,4 +62,3 @@ yarn.lock
 # folder
 dist
 lib
-
