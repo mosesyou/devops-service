@@ -1,18 +1,19 @@
 package io.choerodon.devops.infra.feign.fallback;
 
-import java.util.List;
-import java.util.Map;
-
-import javax.validation.Valid;
-
 import io.choerodon.core.exception.CommonException;
-import io.choerodon.devops.infra.dto.gitlab.CommitDTO;
+import io.choerodon.devops.api.vo.CiVariableVO;
+import io.choerodon.devops.api.vo.FileCreationVO;
 import io.choerodon.devops.infra.dto.RepositoryFileDTO;
 import io.choerodon.devops.infra.dto.gitlab.*;
+import io.choerodon.devops.infra.dto.gitlab.ci.Pipeline;
 import io.choerodon.devops.infra.feign.GitlabServiceClient;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
+
+import javax.validation.Valid;
+import java.util.List;
+import java.util.Map;
 
 
 /**
@@ -20,6 +21,21 @@ import org.springframework.stereotype.Component;
  */
 @Component
 public class GitlabServiceClientFallback implements GitlabServiceClient {
+
+    @Override
+    public ResponseEntity<RepositoryFileDTO> createFile(Integer projectId, FileCreationVO fileCreationVO) {
+        throw new CommonException("error.file.create");
+    }
+
+    @Override
+    public ResponseEntity<RepositoryFileDTO> updateFile(Integer projectId, FileCreationVO fileCreationVO) {
+        throw new CommonException("error.file.update");
+    }
+
+    @Override
+    public ResponseEntity deleteFile(Integer projectId, FileCreationVO fileCreationVO) {
+        throw new CommonException("error.file.delete");
+    }
 
     @Override
     public ResponseEntity<GitLabUserDTO> queryUserById(Integer userId) {
@@ -62,7 +78,7 @@ public class GitlabServiceClientFallback implements GitlabServiceClient {
     }
 
     @Override
-    public ResponseEntity createDeploykey(Integer projectId, String title, String key, boolean canPush, Integer userId) {
+    public ResponseEntity createDeploykey(Integer projectId, GitlabTransferDTO gitlabTransferDTO, boolean canPush, Integer userId) {
         throw new CommonException("error.deploykey.create");
     }
 
@@ -72,7 +88,7 @@ public class GitlabServiceClientFallback implements GitlabServiceClient {
     }
 
     @Override
-    public ResponseEntity<Map<String, Object>> addProjectVariable(Integer projectId, String key, String value, Boolean protecteds, Integer userId) {
+    public ResponseEntity<CiVariableVO> addProjectVariable(Integer projectId, GitlabTransferDTO gitlabTransferDTO, Boolean protecteds, Integer userId) {
         throw new CommonException("error.variable.get");
     }
 
@@ -97,8 +113,13 @@ public class GitlabServiceClientFallback implements GitlabServiceClient {
     }
 
     @Override
-    public ResponseEntity<List<VariableDTO>> listVariable(Integer projectId, Integer userId) {
-        throw new CommonException("error.variable.get");
+    public ResponseEntity<List<CiVariableVO>> listAppServiceVariable(Integer projectId, Integer userId) {
+        throw new CommonException("error.devops.ci.appService.variable.list");
+    }
+
+    @Override
+    public ResponseEntity<List<CiVariableVO>> listProjectVariable(Integer projectId, Integer userId) {
+        throw new CommonException("error.devops.ci.global.variable.list");
     }
 
     @Override
@@ -159,7 +180,7 @@ public class GitlabServiceClientFallback implements GitlabServiceClient {
     }
 
     @Override
-    public ResponseEntity<List<CommitDTO>> getCommits(Integer projectId, String branchName, String since) {
+    public ResponseEntity<List<CommitDTO>> getCommits(Integer projectId, GitlabTransferDTO gitlabTransferDTO) {
         throw new CommonException("error.commits.get");
     }
 
@@ -179,29 +200,6 @@ public class GitlabServiceClientFallback implements GitlabServiceClient {
     }
 
     @Override
-    public ResponseEntity<RepositoryFileDTO> createFile(Integer projectId, String path, String content, String
-            commitMessage, Integer userId) {
-        throw new CommonException("error.file.create");
-    }
-
-    @Override
-    public ResponseEntity<RepositoryFileDTO> createFile(Integer projectId, String path, String content, String
-            commitMessage, Integer userId, String branchName) {
-        throw new CommonException("error.file.create");
-    }
-
-    @Override
-    public ResponseEntity<RepositoryFileDTO> updateFile(Integer projectId, String path, String content, String
-            commitMessage, Integer userId) {
-        throw new CommonException("error.file.update");
-    }
-
-    @Override
-    public ResponseEntity deleteFile(Integer projectId, String path, String commitMessage, Integer userId) {
-        throw new CommonException("error.file.delete");
-    }
-
-    @Override
     public ResponseEntity<RepositoryFileDTO> getFile(Integer projectId, String commit, String filePath) {
         return new ResponseEntity("error.file.get", HttpStatus.INTERNAL_SERVER_ERROR);
     }
@@ -214,8 +212,7 @@ public class GitlabServiceClientFallback implements GitlabServiceClient {
 
 
     @Override
-    public ResponseEntity<MergeRequestDTO> createMergeRequest(Integer projectId, String sourceBranch, String
-            targetBranch, String title, String description, Integer userId) {
+    public ResponseEntity<MergeRequestDTO> createMergeRequest(Integer projectId, GitlabTransferDTO gitlabTransferDTO, Integer userId) {
         throw new CommonException("error.mergeRequest.create");
     }
 
@@ -231,8 +228,7 @@ public class GitlabServiceClientFallback implements GitlabServiceClient {
     }
 
     @Override
-    public ResponseEntity<TagDTO> createTag(Integer projectId, String name, String ref,
-                                            String msg, String releaseNotes, Integer userId) {
+    public ResponseEntity<TagDTO> createTag(Integer projectId, GitlabTransferDTO gitlabTransferDTO, Integer userId) {
         throw new CommonException("error.tags.create");
     }
 
@@ -257,7 +253,7 @@ public class GitlabServiceClientFallback implements GitlabServiceClient {
     }
 
     @Override
-    public ResponseEntity<BranchDTO> createBranch(Integer projectId, String name, String source, Integer userId) {
+    public ResponseEntity<BranchDTO> createBranch(Integer projectId, GitlabTransferDTO gitlabTransferDTO, Integer userId) {
         throw new CommonException("error.branch.create");
     }
 
@@ -283,7 +279,7 @@ public class GitlabServiceClientFallback implements GitlabServiceClient {
     }
 
     @Override
-    public ResponseEntity<GitLabUserDTO> createUser(String password, Integer projectsLimit, GitlabUserReqDTO userReqDTO) {
+    public ResponseEntity<GitLabUserDTO> createUser(Integer projectsLimit, GitlabTransferDTO gitlabTransferDTO) {
         throw new CommonException("error.gitlab.user.create");
     }
 
@@ -293,7 +289,12 @@ public class GitlabServiceClientFallback implements GitlabServiceClient {
     }
 
     @Override
-    public ResponseEntity<List<Map<String, Object>>> batchAddProjectVariable(Integer projectId, Integer userId, @Valid List<VariableDTO> variableDTODTOS) {
+    public ResponseEntity<GitLabUserDTO> updateUserPasswordByUserId(Integer userId, GitlabUserWithPasswordDTO user) {
+        throw new CommonException("error.reset.user.password");
+    }
+
+    @Override
+    public ResponseEntity<List<CiVariableVO>> batchSaveProjectVariable(Integer projectId, Integer userId, @Valid List<CiVariableVO> ciVariableVOList) {
         throw new CommonException("error.variable.create");
     }
 
@@ -308,12 +309,12 @@ public class GitlabServiceClientFallback implements GitlabServiceClient {
     }
 
     @Override
-    public ResponseEntity<CompareResultDTO> queryCompareResult(Integer projectId, String from, String to) {
+    public ResponseEntity<CompareResultDTO> queryCompareResult(Integer projectId, GitlabTransferDTO gitlabTransferDTO) {
         throw new CommonException("error.compare.query");
     }
 
     @Override
-    public ResponseEntity<Map<String, Object>> createProtectedBranch(Integer projectId, String name, String mergeAccessLevel, String pushAccessLevel, Integer userId) {
+    public ResponseEntity<Map<String, Object>> createProtectedBranch(Integer projectId, GitlabTransferDTO gitlabTransferDTO, Integer userId) {
         throw new CommonException("error.compare.query");
     }
 
@@ -323,17 +324,17 @@ public class GitlabServiceClientFallback implements GitlabServiceClient {
     }
 
     @Override
-    public ResponseEntity<GitlabPipelineDTO> retryPipeline(Integer projectId, Integer pipelineId, Integer userId) {
+    public ResponseEntity<Pipeline> retryPipeline(Integer projectId, Integer pipelineId, Integer userId) {
         throw new CommonException("error.pipeline.retry");
     }
 
     @Override
-    public ResponseEntity<GitlabPipelineDTO> cancelPipeline(Integer projectId, Integer pipelineId, Integer userId) {
+    public ResponseEntity<Pipeline> cancelPipeline(Integer projectId, Integer pipelineId, Integer userId) {
         throw new CommonException("error.pipeline.cancel");
     }
 
     @Override
-    public ResponseEntity<TagDTO> updateTag(Integer projectId, String name, String releaseNotes, Integer userId) {
+    public ResponseEntity<TagDTO> updateTag(Integer projectId, GitlabTransferDTO gitlabTransferDTO, Integer userId) {
         throw new CommonException("error.tag.update");
     }
 
@@ -390,5 +391,85 @@ public class GitlabServiceClientFallback implements GitlabServiceClient {
     @Override
     public ResponseEntity<String> getAdminToken() {
         return null;
+    }
+
+    @Override
+    public ResponseEntity<Boolean> checkIsAdmin(Integer userId) {
+        return new ResponseEntity<>(Boolean.FALSE, HttpStatus.OK);
+    }
+
+    @Override
+    public ResponseEntity<Boolean> assignAdmin(Integer userId) {
+        return new ResponseEntity<>(Boolean.FALSE, HttpStatus.OK);
+    }
+
+    @Override
+    public ResponseEntity<Boolean> deleteAdmin(Integer userId) {
+        return new ResponseEntity<>(Boolean.FALSE, HttpStatus.OK);
+    }
+
+    @Override
+    public ResponseEntity<List<AccessRequestDTO>> listAccessRequestsOfGroup(Integer groupId) {
+        throw new CommonException("failed.to.query.group.access.request", groupId);
+    }
+
+    @Override
+    public ResponseEntity denyAccessRequest(Integer groupId, Integer userId) {
+        return new ResponseEntity(HttpStatus.OK);
+    }
+
+    @Override
+    public ResponseEntity createCommit(Integer projectId, Integer userId, CommitPayloadDTO commitPayloadDTO) {
+        throw new CommonException("error.manipulate.gitlab.files");
+    }
+
+    @Override
+    public ResponseEntity createPipeline(Integer projectId, Integer userId, String ref) {
+        return null;
+    }
+
+    @Override
+    public ResponseEntity<String> queryTrace(Integer projectId, Integer jobId, Integer userId) {
+        return null;
+    }
+
+    @Override
+    public ResponseEntity<JobDTO> retryJob(Integer projectId, Integer jobId, Integer userId) {
+        return null;
+    }
+
+    @Override
+    public ResponseEntity<BranchDTO> queryBranchByName(Integer projectId, String branchName) {
+        throw new CommonException("error.gitlab.branch.query");
+    }
+
+    @Override
+    public ResponseEntity<GitLabUserDTO> queryAdminUser() {
+        throw new CommonException("error.gitlab.admin.id.query");
+    }
+
+    @Override
+    public ResponseEntity<CiVariableVO> createGroupVariable(Integer groupId, GitlabTransferDTO gitlabTransferDTO, boolean protecteds, Integer userId) {
+        throw new CommonException("error.gitlab.create.group.variable");
+    }
+
+    @Override
+    public ResponseEntity<List<CiVariableVO>> batchSaveGroupVariable(Integer groupId, Integer userId, List<CiVariableVO> list) {
+        throw new CommonException("error.gitlab.batch.create.group.variable");
+    }
+
+    @Override
+    public ResponseEntity<Void> deleteVariable(Integer groupId, Integer userId, String key) {
+        throw new CommonException("error.gitlab.delete.group.variable");
+    }
+
+    @Override
+    public ResponseEntity<Void> batchGroupDeleteVariable(Integer groupId, Integer userId, List<String> key) {
+        throw new CommonException("error.gitlab.batch.delete.group.variable");
+    }
+
+    @Override
+    public ResponseEntity<Void> batchProjectDeleteVariable(Integer projectId, Integer userId, List<String> key) {
+        throw new CommonException("error.gitlab.batch.delete.project.variable");
     }
 }

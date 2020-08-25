@@ -1,46 +1,50 @@
 package io.choerodon.devops.app.service.impl;
 
+import static io.choerodon.devops.app.eventhandler.constants.HarborRepoConstants.DEFAULT_REPO;
+
+import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.util.Collections;
-import java.util.Objects;
-import java.util.Optional;
-import java.util.UUID;
+import java.util.*;
 import javax.annotation.PostConstruct;
 
 import com.alibaba.fastjson.JSONObject;
 import com.google.gson.Gson;
-import io.choerodon.core.exception.CommonException;
-import io.choerodon.devops.api.validator.ApplicationValidator;
-import io.choerodon.devops.api.vo.AppServiceRepVO;
-import io.choerodon.devops.api.vo.AppServiceReqVO;
-import io.choerodon.devops.api.vo.DemoDataVO;
-import io.choerodon.devops.api.vo.TagVO;
-import io.choerodon.devops.api.vo.kubernetes.MockMultipartFile;
-import io.choerodon.devops.app.eventhandler.DevopsSagaHandler;
-import io.choerodon.devops.app.eventhandler.payload.DevOpsAppServicePayload;
-import io.choerodon.devops.app.eventhandler.payload.OrganizationRegisterEventPayload;
-import io.choerodon.devops.app.service.*;
-import io.choerodon.devops.infra.dto.AppServiceDTO;
-import io.choerodon.devops.infra.dto.DevopsProjectDTO;
-import io.choerodon.devops.infra.dto.UserAttrDTO;
-import io.choerodon.devops.infra.dto.gitlab.BranchDTO;
-import io.choerodon.devops.infra.dto.gitlab.MemberDTO;
-import io.choerodon.devops.infra.dto.gitlab.MergeRequestDTO;
-import io.choerodon.devops.infra.dto.iam.OrganizationDTO;
-import io.choerodon.devops.infra.dto.iam.ProjectDTO;
-import io.choerodon.devops.infra.enums.AccessLevel;
-import io.choerodon.devops.infra.feign.operator.BaseServiceClientOperator;
-import io.choerodon.devops.infra.feign.operator.GitlabServiceClientOperator;
-import io.choerodon.devops.infra.util.ConvertUtils;
-import io.choerodon.devops.infra.util.GitUserNameUtil;
-import io.choerodon.devops.infra.util.TypeUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.util.CollectionUtils;
 import org.springframework.util.StreamUtils;
+import org.springframework.web.multipart.MultipartFile;
+
+import io.choerodon.core.exception.CommonException;
+import io.choerodon.devops.api.validator.ApplicationValidator;
+import io.choerodon.devops.api.vo.*;
+import io.choerodon.devops.api.vo.kubernetes.MockMultipartFile;
+import io.choerodon.devops.app.eventhandler.DevopsSagaHandler;
+import io.choerodon.devops.app.eventhandler.payload.DevOpsAppServicePayload;
+import io.choerodon.devops.app.eventhandler.payload.OrganizationRegisterEventPayload;
+import io.choerodon.devops.app.service.*;
+import io.choerodon.devops.infra.constant.GitOpsConstants;
+import io.choerodon.devops.infra.constant.MiscConstants;
+import io.choerodon.devops.infra.dto.*;
+import io.choerodon.devops.infra.dto.gitlab.BranchDTO;
+import io.choerodon.devops.infra.dto.gitlab.CommitDTO;
+import io.choerodon.devops.infra.dto.gitlab.MemberDTO;
+import io.choerodon.devops.infra.dto.gitlab.MergeRequestDTO;
+import io.choerodon.devops.infra.dto.iam.ProjectDTO;
+import io.choerodon.devops.infra.dto.iam.Tenant;
+import io.choerodon.devops.infra.enums.AccessLevel;
+import io.choerodon.devops.infra.enums.CommandStatus;
+import io.choerodon.devops.infra.enums.ProjectConfigType;
+import io.choerodon.devops.infra.feign.operator.BaseServiceClientOperator;
+import io.choerodon.devops.infra.feign.operator.GitlabServiceClientOperator;
+import io.choerodon.devops.infra.mapper.AppServiceMapper;
+import io.choerodon.devops.infra.mapper.AppServiceVersionReadmeMapper;
+import io.choerodon.devops.infra.util.*;
 
 /**
  * 为搭建Demo环境初始化项目中的一些数据，包含应用，分支，提交，版本，应用市场等
@@ -51,15 +55,17 @@ import org.springframework.util.StreamUtils;
  */
 @Service
 public class DevopsDemoEnvInitServiceImpl implements DevopsDemoEnvInitService {
-    private Logger logger = LoggerFactory.getLogger(this.getClass());
+    private final Logger logger = LoggerFactory.getLogger(this.getClass());
+
+    private static final String DESTINATION_PATH = "devops";
+    private static final String STORE_PATH = "stores";
+    private static final String ERROR_VERSION_INSERT = "error.version.insert";
 
     @Value("${demo.data.file.path:demo/demo-data.json}")
     private String demoDataFilePath;
     @Value("${demo.tgz.file.path:demo/code-i.tgz}")
     private String tgzFilePath;
 
-    @Autowired
-    private DevopsConfigService projectConfigService;
     @Autowired
     private AppServiceService applicationService;
     @Autowired
@@ -75,13 +81,25 @@ public class DevopsDemoEnvInitServiceImpl implements DevopsDemoEnvInitService {
     @Autowired
     private GitlabGroupMemberService gitlabGroupMemberService;
     @Autowired
-    private AppServiceUserPermissionService appServiceUserPermissionService;
-    @Autowired
     private DevopsSagaHandler devopsSagaHandler;
     @Autowired
     private GitlabServiceClientOperator gitlabServiceClientOperator;
+    @Autowired
+    private DevopsBranchService devopsBranchService;
+    @Autowired
+    private AppServiceMapper appServiceMapper;
+    @Autowired
+    private DevopsConfigService devopsConfigService;
+    @Autowired
+    private ChartUtil chartUtil;
+    @Autowired
+    private AppServiceVersionValueService appServiceVersionValueService;
+    @Autowired
+    private AppServiceVersionReadmeMapper appServiceVersionReadmeMapper;
+    @Autowired
+    private SendNotificationService sendNotificationService;
 
-    private Gson gson = new Gson();
+    private final Gson gson = new Gson();
 
     private DemoDataVO demoDataVO;
     private Integer gitlabUserId;
@@ -133,17 +151,44 @@ public class DevopsDemoEnvInitServiceImpl implements DevopsDemoEnvInitService {
         mergeBranch(gitlabProjectId);
 
         // 6. 创建标记，由于选择人工造版本数据而不是通过ci，此处tag-name不使用正确的。
-        Optional<TagVO> tagVO = devopsGitService.pageTagsByOptions(projectId, applicationRepDTO.getId(), null, 0, 100).getList().stream().filter(tagVO1 -> tagVO1.getName().equals(demoDataVO.getTagInfo().getTag() + "-alpha.1")).findFirst();
+        Optional<TagVO> tagVO = devopsGitService.pageTagsByOptions(projectId, applicationRepDTO.getId(), null, 0, 100).getContent().stream().filter(tagVO1 -> tagVO1.getName().equals(demoDataVO.getTagInfo().getTag() + "-alpha.1")).findFirst();
         if (!tagVO.isPresent()) {
             devopsGitService.createTag(projectId, applicationRepDTO.getId(), demoDataVO.getTagInfo().getTag() + "-alpha.1", demoDataVO.getTagInfo().getRef(), demoDataVO.getTagInfo().getMsg(), demoDataVO.getTagInfo().getReleaseNotes());
         }
         createFakeApplicationVersion(applicationRepDTO.getId());
+
+        // 7.读出应用服务的分支存入devops_branch
+        createDevopsBranch(gitlabProjectId, gitlabUserId, applicationRepDTO, organizationRegisterEventPayload.getUser().getId());
 
         // 7. 发布应用
 //        ApplicationReleasingVO applicationReleasingDTO = demoDataVO.getApplicationRelease();
 //        applicationReleasingDTO.setAppServiceId(applicationRepDTO.getId());
 //        applicationReleasingDTO.setAppVersions(Collections.singletonList(getApplicationVersion(projectId, applicationRepDTO.getId())));
 //        applicationMarketService.create(projectId, applicationReleasingDTO);
+    }
+
+    private void createDevopsBranch(Integer gitlabProjectId, Integer gitlabUserId, AppServiceRepVO appServiceRepVO, Long userId) {
+        List<BranchDTO> branchDTOS = gitlabServiceClientOperator.listBranch(gitlabProjectId, gitlabUserId);
+        if (!CollectionUtils.isEmpty(branchDTOS)) {
+            branchDTOS.forEach(branchDTO -> {
+                CommitDTO commitDTO = branchDTO.getCommit();
+                Date checkoutDate = commitDTO.getCommittedDate();
+                String checkoutSha = commitDTO.getId();
+                DevopsBranchDTO devopsBranchDTO = new DevopsBranchDTO();
+                devopsBranchDTO.setAppServiceId(appServiceRepVO.getId());
+                devopsBranchDTO.setStatus(CommandStatus.SUCCESS.getStatus());
+                devopsBranchDTO.setCheckoutDate(checkoutDate);
+                devopsBranchDTO.setCheckoutCommit(checkoutSha);
+                devopsBranchDTO.setBranchName(branchDTO.getName());
+                devopsBranchDTO.setUserId(userId);
+
+                devopsBranchDTO.setLastCommitDate(checkoutDate);
+                devopsBranchDTO.setLastCommit(checkoutSha);
+                devopsBranchDTO.setLastCommitMsg(commitDTO.getMessage());
+                devopsBranchDTO.setLastCommitUser(userId);
+                devopsBranchService.baseCreate(devopsBranchDTO);
+            });
+        }
     }
 
     /**
@@ -158,7 +203,7 @@ public class DevopsDemoEnvInitServiceImpl implements DevopsDemoEnvInitService {
         UserAttrDTO userAttrDTO = userAttrService.baseQueryById(TypeUtil.objToLong(GitUserNameUtil.getUserId()));
         ApplicationValidator.checkApplicationService(applicationReqDTO.getCode());
         ProjectDTO projectDTO = baseServiceClientOperator.queryIamProjectById(projectId);
-        OrganizationDTO organization = baseServiceClientOperator.queryOrganizationById(projectDTO.getOrganizationId());
+        Tenant organization = baseServiceClientOperator.queryOrganizationById(projectDTO.getOrganizationId());
         AppServiceDTO applicationDTO = ConvertUtils.convertObject(applicationReqDTO, AppServiceDTO.class);
 
         applicationDTO.setProjectId(projectId);
@@ -168,20 +213,32 @@ public class DevopsDemoEnvInitServiceImpl implements DevopsDemoEnvInitService {
         applicationDTO.setActive(true);
         applicationDTO.setSynchro(false);
         applicationDTO.setSkipCheckPermission(Boolean.TRUE);
+        applicationDTO.setToken(GenerateUUID.generateUUID());
 
         // 查询创建应用所在的gitlab应用组
         DevopsProjectDTO devopsProjectDTO = devopsProjectService.baseQueryByProjectId(applicationDTO.getProjectId());
-        MemberDTO gitlabMember = gitlabGroupMemberService.queryByUserId(
-                TypeUtil.objToInteger(devopsProjectDTO.getDevopsAppGroupId()),
-                TypeUtil.objToInteger(userAttrDTO.getGitlabUserId()));
-        if (gitlabMember == null || !Objects.equals(gitlabMember.getAccessLevel(), AccessLevel.OWNER.toValue())) {
-            throw new CommonException("error.user.not.owner");
+
+        boolean isGitlabRoot = false;
+
+        if (Boolean.TRUE.equals(userAttrDTO.getGitlabAdmin())) {
+            // 如果这边表存了gitlabAdmin这个字段,那么gitlabUserId就不会为空,所以不判断此字段为空
+            isGitlabRoot = gitlabServiceClientOperator.isGitlabAdmin(TypeUtil.objToInteger(userAttrDTO.getGitlabUserId()));
         }
+
+        if (!isGitlabRoot) {
+            MemberDTO gitlabMember = gitlabGroupMemberService.queryByUserId(
+                    TypeUtil.objToInteger(devopsProjectDTO.getDevopsAppGroupId()),
+                    TypeUtil.objToInteger(userAttrDTO.getGitlabUserId()));
+            if (gitlabMember == null || !Objects.equals(gitlabMember.getAccessLevel(), AccessLevel.OWNER.toValue())) {
+                throw new CommonException("error.user.not.owner");
+            }
+        }
+
         // 创建saga payload
         DevOpsAppServicePayload devOpsAppServicePayload = new DevOpsAppServicePayload();
         devOpsAppServicePayload.setType("application");
         devOpsAppServicePayload.setPath(applicationReqDTO.getCode());
-        devOpsAppServicePayload.setOrganizationId(organization.getId());
+        devOpsAppServicePayload.setOrganizationId(organization.getTenantId());
         devOpsAppServicePayload.setUserId(TypeUtil.objToInteger(userAttrDTO.getGitlabUserId()));
         devOpsAppServicePayload.setGroupId(TypeUtil.objToInteger(devopsProjectDTO.getDevopsAppGroupId()));
         devOpsAppServicePayload.setUserIds(Collections.emptyList());
@@ -248,8 +305,8 @@ public class DevopsDemoEnvInitServiceImpl implements DevopsDemoEnvInitService {
      * @return the version
      */
 //    private AppMarketVersionVO getApplicationVersion(Long projectId, Long applicationId) {
-//        PageRequest pageRequest = new PageRequest(0, 1);
-//        PageInfo<ApplicationVersionRespVO> versions = applicationVersionService.pageByOptions(projectId, applicationId, pageRequest, null);
+//        PageRequest pageable = new PageRequest(0, 1);
+//        Page<ApplicationVersionRespVO> versions = applicationVersionService.pageByOptions(projectId, applicationId, pageable, null);
 //        if (!versions.getList().isEmpty()) {
 //            AppMarketVersionVO appMarketVersionVO = new AppMarketVersionVO();
 //            BeanUtils.copyProperties(versions.getList().get(0), appMarketVersionVO);
@@ -270,10 +327,89 @@ public class DevopsDemoEnvInitServiceImpl implements DevopsDemoEnvInitService {
             byte[] bytes = StreamUtils.copyToByteArray(this.getClass().getClassLoader().getResourceAsStream(tgzFilePath));
             MockMultipartFile multipartFile = new MockMultipartFile("code-i.tgz", "code-i.tgz", "application/tgz", bytes);
             //harborConfigId需要传入
-            appServiceVersionService.create(demoDataVO.getAppServiceVersionDTO().getImage(),null, applicationService.baseQuery(appServiceId).getToken(), demoDataVO.getAppServiceVersionDTO().getVersion(), demoDataVO.getAppServiceVersionDTO().getCommit(), multipartFile);
+            doCreate(demoDataVO.getAppServiceVersionDTO().getImage(), applicationService.baseQuery(appServiceId).getToken(), demoDataVO.getAppServiceVersionDTO().getVersion(), demoDataVO.getAppServiceVersionDTO().getCommit(), multipartFile);
         } catch (IOException e) {
             logger.error("can not find file {}", tgzFilePath);
             throw new CommonException(e);
         }
+    }
+
+    private void doCreate(String image, String token, String version, String commit, MultipartFile files) {
+        AppServiceDTO appServiceDTO = appServiceMapper.queryByToken(token);
+
+        AppServiceVersionValueDTO appServiceVersionValueDTO = new AppServiceVersionValueDTO();
+        AppServiceVersionDTO appServiceVersionDTO = new AppServiceVersionDTO();
+        ProjectDTO projectDTO = baseServiceClientOperator.queryIamProjectById(appServiceDTO.getProjectId());
+        Tenant organization = baseServiceClientOperator.queryOrganizationById(projectDTO.getOrganizationId());
+        AppServiceVersionDTO newApplicationVersion = appServiceVersionService.baseQueryByAppServiceIdAndVersion(appServiceDTO.getId(), version);
+        appServiceVersionDTO.setAppServiceId(appServiceDTO.getId());
+        appServiceVersionDTO.setImage(image);
+        appServiceVersionDTO.setCommit(commit);
+        appServiceVersionDTO.setVersion(version);
+        appServiceVersionDTO.setHarborConfigId(1L);
+        appServiceVersionDTO.setRepoType(DEFAULT_REPO);
+        appServiceVersionDTO.setRef(GitOpsConstants.MASTER);
+
+        // 查询helm仓库配置id
+        DevopsConfigDTO devopsConfigDTO = devopsConfigService.queryRealConfig(appServiceDTO.getId(), MiscConstants.APP_SERVICE, ProjectConfigType.CHART.getType(), null);
+        ConfigVO helmConfig = gson.fromJson(devopsConfigDTO.getConfig(), ConfigVO.class);
+        String helmUrl = helmConfig.getUrl();
+        appServiceVersionDTO.setHelmConfigId(devopsConfigDTO.getId());
+
+        appServiceVersionDTO.setRepository(helmUrl.endsWith("/") ? helmUrl + organization.getTenantNum() + "/" + projectDTO.getCode() + "/" : helmUrl + "/" + organization.getTenantNum() + "/" + projectDTO.getCode() + "/");
+        String storeFilePath = STORE_PATH + version;
+
+        String destFilePath = DESTINATION_PATH + version;
+        String path = FileUtil.multipartFileToFile(storeFilePath, files);
+        //上传chart包到chartmuseum
+        chartUtil.uploadChart(helmUrl, organization.getTenantNum(), projectDTO.getCode(), new File(path), helmConfig.getUserName(), helmConfig.getPassword());
+
+        // 有需求让重新上传chart包，所以校验重复推后
+        if (newApplicationVersion != null) {
+            FileUtil.deleteDirectories(storeFilePath);
+            return;
+        }
+        FileUtil.unTarGZ(path, destFilePath);
+
+        // 使用深度优先遍历查找文件, 避免查询到子chart的values值
+        File valuesFile = FileUtil.queryFileFromFilesBFS(new File(destFilePath), "values.yaml");
+
+        if (valuesFile == null) {
+            FileUtil.deleteDirectories(storeFilePath, destFilePath);
+            throw new CommonException("error.find.values.yaml.in.chart");
+        }
+
+        String values;
+        try (FileInputStream fis = new FileInputStream(valuesFile)) {
+            values = FileUtil.replaceReturnString(fis, null);
+        } catch (IOException e) {
+            FileUtil.deleteDirectories(storeFilePath, destFilePath);
+            throw new CommonException(e);
+        }
+
+        try {
+            FileUtil.checkYamlFormat(values);
+        } catch (CommonException e) {
+            FileUtil.deleteDirectories(storeFilePath, destFilePath);
+            throw new CommonException("The format of the values.yaml in the chart is invalid!", e);
+        }
+        appServiceVersionValueDTO.setValue(values);
+        try {
+            appServiceVersionDTO.setValueId(appServiceVersionValueService
+                    .baseCreate(appServiceVersionValueDTO).getId());
+        } catch (Exception e) {
+            FileUtil.deleteDirectories(storeFilePath, destFilePath);
+            throw new CommonException(ERROR_VERSION_INSERT, e);
+        }
+
+        AppServiceVersionReadmeDTO appServiceVersionReadmeDTO = new AppServiceVersionReadmeDTO();
+        appServiceVersionReadmeDTO.setReadme(FileUtil.getReadme(destFilePath));
+        appServiceVersionReadmeMapper.insert(appServiceVersionReadmeDTO);
+
+        appServiceVersionDTO.setReadmeValueId(appServiceVersionReadmeDTO.getId());
+        appServiceVersionService.baseCreate(appServiceVersionDTO);
+
+        FileUtil.deleteDirectories(destFilePath, storeFilePath);
+        sendNotificationService.sendWhenAppServiceVersion(appServiceVersionDTO, appServiceDTO, projectDTO);
     }
 }

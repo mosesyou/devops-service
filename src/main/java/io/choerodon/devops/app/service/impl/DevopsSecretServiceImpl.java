@@ -1,22 +1,8 @@
 package io.choerodon.devops.app.service.impl;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-
-import com.github.pagehelper.PageHelper;
-import com.github.pagehelper.PageInfo;
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
-import io.kubernetes.client.models.V1ObjectMeta;
-import io.kubernetes.client.models.V1Secret;
-import org.springframework.beans.BeanUtils;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
-
-import io.choerodon.base.domain.PageRequest;
+import io.choerodon.core.domain.Page;
 import io.choerodon.core.exception.CommonException;
 import io.choerodon.devops.api.validator.DevopsSecretValidator;
 import io.choerodon.devops.api.vo.SecretReqVO;
@@ -24,9 +10,9 @@ import io.choerodon.devops.api.vo.SecretRespVO;
 import io.choerodon.devops.app.service.*;
 import io.choerodon.devops.infra.dto.*;
 import io.choerodon.devops.infra.enums.CommandStatus;
-import io.choerodon.devops.infra.enums.HelmObjectKind;
 import io.choerodon.devops.infra.enums.ObjectType;
 import io.choerodon.devops.infra.enums.SecretStatus;
+import io.choerodon.devops.infra.enums.SendSettingEnum;
 import io.choerodon.devops.infra.feign.operator.BaseServiceClientOperator;
 import io.choerodon.devops.infra.feign.operator.GitlabServiceClientOperator;
 import io.choerodon.devops.infra.gitops.ResourceConvertToYamlHandler;
@@ -34,6 +20,19 @@ import io.choerodon.devops.infra.gitops.ResourceFileCheckHandler;
 import io.choerodon.devops.infra.handler.ClusterConnectionHandler;
 import io.choerodon.devops.infra.mapper.DevopsSecretMapper;
 import io.choerodon.devops.infra.util.*;
+import io.choerodon.mybatis.pagehelper.PageHelper;
+import io.choerodon.mybatis.pagehelper.domain.PageRequest;
+import io.kubernetes.client.models.V1ObjectMeta;
+import io.kubernetes.client.models.V1Secret;
+import org.springframework.beans.BeanUtils;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 
 /**
@@ -54,7 +53,7 @@ public class DevopsSecretServiceImpl implements DevopsSecretService {
     private static final String DOCKER_CONFIG_JSON = ".dockerconfigjson";
     private static final String MASTER = "master";
 
-    private Gson gson = new Gson();
+    private final Gson gson = new Gson();
 
     @Autowired
     private ClusterConnectionHandler clusterConnectionHandler;
@@ -74,14 +73,18 @@ public class DevopsSecretServiceImpl implements DevopsSecretService {
     private DevopsSecretMapper devopsSecretMapper;
     @Autowired
     private BaseServiceClientOperator baseServiceClientOperator;
+    @Autowired
+    private SendNotificationService sendNotificationService;
+    @Autowired
+    private PermissionHelper permissionHelper;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public SecretRespVO createOrUpdate(SecretReqVO secretReqVO) {
+    public SecretRespVO createOrUpdate(Long projectId, SecretReqVO secretReqVO) {
         if (secretReqVO.getValue() == null || secretReqVO.getValue().size() == 0) {
             throw new CommonException("error.secret.value.is.null");
         }
-        DevopsEnvironmentDTO devopsEnvironmentDTO = devopsEnvironmentService.baseQueryById(secretReqVO.getEnvId());
+        DevopsEnvironmentDTO devopsEnvironmentDTO = permissionHelper.checkEnvBelongToProject(projectId, secretReqVO.getEnvId());
         UserAttrDTO userAttrDTO = userAttrService.baseQueryById(TypeUtil.objToLong(GitUserNameUtil.getUserId()));
 
         //校验环境相关信息
@@ -250,7 +253,7 @@ public class DevopsSecretServiceImpl implements DevopsSecretService {
         }
 
         // 判断当前容器目录下是否存在环境对应的gitops文件目录，不存在则克隆
-        String path = clusterConnectionHandler.handDevopsEnvGitRepository(devopsEnvironmentDTO.getProjectId(), devopsEnvironmentDTO.getCode(), devopsEnvironmentDTO.getEnvIdRsa());
+        String path = clusterConnectionHandler.handDevopsEnvGitRepository(devopsEnvironmentDTO.getProjectId(), devopsEnvironmentDTO.getCode(), devopsEnvironmentDTO.getId(), devopsEnvironmentDTO.getEnvIdRsa(), devopsEnvironmentDTO.getType(), devopsEnvironmentDTO.getClusterCode());
 
         ResourceConvertToYamlHandler<V1Secret> resourceConvertToYamlHandler = new ResourceConvertToYamlHandler<>();
         resourceConvertToYamlHandler.setType(v1Secret);
@@ -261,7 +264,7 @@ public class DevopsSecretServiceImpl implements DevopsSecretService {
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public Boolean deleteSecret(Long envId, Long secretId) {
+    public Boolean deleteSecret(Long projectId, Long envId, Long secretId) {
         DevopsSecretDTO devopsSecretDTO = baseQuery(secretId);
 
         if (devopsSecretDTO == null) {
@@ -270,7 +273,7 @@ public class DevopsSecretServiceImpl implements DevopsSecretService {
 
         UserAttrDTO userAttrDTO = userAttrService.baseQueryById(TypeUtil.objToLong(GitUserNameUtil.getUserId()));
 
-        DevopsEnvironmentDTO devopsEnvironmentDTO = devopsEnvironmentService.baseQueryById(envId);
+        DevopsEnvironmentDTO devopsEnvironmentDTO = permissionHelper.checkEnvBelongToProject(projectId, envId);
 
         //校验环境相关信息
         devopsEnvironmentService.checkEnv(devopsEnvironmentDTO, userAttrDTO);
@@ -283,9 +286,9 @@ public class DevopsSecretServiceImpl implements DevopsSecretService {
         baseUpdate(devopsSecretDTO);
 
         //判断当前容器目录下是否存在环境对应的gitops文件目录，不存在则克隆
-        String path = clusterConnectionHandler.handDevopsEnvGitRepository(devopsEnvironmentDTO.getProjectId(), devopsEnvironmentDTO.getCode(), devopsEnvironmentDTO.getEnvIdRsa());
+        String path = clusterConnectionHandler.handDevopsEnvGitRepository(devopsEnvironmentDTO.getProjectId(), devopsEnvironmentDTO.getCode(), devopsEnvironmentDTO.getId(), devopsEnvironmentDTO.getEnvIdRsa(), devopsEnvironmentDTO.getType(), devopsEnvironmentDTO.getClusterCode());
 
-        // 查询改对象所在文件中是否含有其它对象
+        // 查询该对象所在文件中是否含有其它对象
         DevopsEnvFileResourceDTO devopsEnvFileResourceDTO = devopsEnvFileResourceService
                 .baseQueryByEnvIdAndResourceId(devopsEnvironmentDTO.getId(), secretId, SECRET);
         if (devopsEnvFileResourceDTO == null) {
@@ -325,10 +328,12 @@ public class DevopsSecretServiceImpl implements DevopsSecretService {
             v1ObjectMeta.setName(devopsSecretDTO.getName());
             v1Secret.setMetadata(v1ObjectMeta);
             resourceConvertToYamlHandler.setType(v1Secret);
-            Integer projectId = TypeUtil.objToInteger(devopsEnvironmentDTO.getGitlabEnvProjectId());
-            resourceConvertToYamlHandler.operationEnvGitlabFile(null, projectId, DELETE, userAttrDTO.getGitlabUserId(), secretId,
+            Integer gitlabEnvProjectId = TypeUtil.objToInteger(devopsEnvironmentDTO.getGitlabEnvProjectId());
+            resourceConvertToYamlHandler.operationEnvGitlabFile(null, gitlabEnvProjectId, DELETE, userAttrDTO.getGitlabUserId(), secretId,
                     SECRET, null, false, devopsEnvironmentDTO.getId(), path);
         }
+        //删除成功发送web hook json
+        sendNotificationService.sendWhenSecret(devopsSecretDTO, SendSettingEnum.DELETE_RESOURCE.value());
         return true;
     }
 
@@ -338,7 +343,7 @@ public class DevopsSecretServiceImpl implements DevopsSecretService {
         DevopsSecretDTO devopsSecretDTO = baseQuery(secretId);
         DevopsEnvironmentDTO devopsEnvironmentDTO = devopsEnvironmentService.baseQueryById(devopsSecretDTO.getEnvId());
         clusterConnectionHandler.checkEnvConnection(devopsEnvironmentDTO.getClusterId());
-        devopsEnvCommandService.baseListByObject(HelmObjectKind.SECRET.toValue(), devopsSecretDTO.getId()).forEach(t -> devopsEnvCommandService.baseDeleteByEnvCommandId(t));
+        devopsEnvCommandService.baseListByObject(ObjectType.SECRET.getType(), devopsSecretDTO.getId()).forEach(t -> devopsEnvCommandService.baseDeleteByEnvCommandId(t));
         baseDelete(secretId);
     }
 
@@ -396,8 +401,8 @@ public class DevopsSecretServiceImpl implements DevopsSecretService {
     }
 
     @Override
-    public PageInfo<SecretRespVO> pageByOption(Long envId, PageRequest pageRequest, String params, Long appServiceId, boolean toDecode) {
-        return ConvertUtils.convertPage(basePageByOption(envId, pageRequest, params, appServiceId), dto -> dtoToVO(dto, toDecode));
+    public Page<SecretRespVO> pageByOption(Long envId, PageRequest pageable, String params, Long appServiceId, boolean toDecode) {
+        return ConvertUtils.convertPage(basePageByOption(envId, pageable, params, appServiceId), dto -> dtoToVO(dto, toDecode));
     }
 
     private SecretRespVO dtoToVO(DevopsSecretDTO devopsSecretDTO, boolean toDecode) {
@@ -429,9 +434,16 @@ public class DevopsSecretServiceImpl implements DevopsSecretService {
     }
 
     @Override
-    public void checkName(Long envId, String name) {
-        DevopsSecretValidator.checkName(name);
-        baseCheckName(name, envId);
+    public boolean checkName(Long envId, String name) {
+        return DevopsSecretValidator.isNameValid(name) && isNameUnique(envId, name);
+    }
+
+    @Override
+    public boolean isNameUnique(Long envId, String name) {
+        DevopsSecretDTO devopsSecretDTO = new DevopsSecretDTO();
+        devopsSecretDTO.setName(name);
+        devopsSecretDTO.setEnvId(envId);
+        return devopsSecretMapper.selectCount(devopsSecretDTO) == 0;
     }
 
     @Override
@@ -461,10 +473,7 @@ public class DevopsSecretServiceImpl implements DevopsSecretService {
 
     @Override
     public void baseCheckName(String name, Long envId) {
-        DevopsSecretDTO devopsSecretDTO = new DevopsSecretDTO();
-        devopsSecretDTO.setName(name);
-        devopsSecretDTO.setEnvId(envId);
-        if (devopsSecretMapper.selectOne(devopsSecretDTO) != null) {
+        if (!isNameUnique(envId, name)) {
             throw new CommonException("error.secret.name.already.exists");
         }
     }
@@ -483,12 +492,11 @@ public class DevopsSecretServiceImpl implements DevopsSecretService {
     }
 
     @Override
-    public PageInfo<DevopsSecretDTO> basePageByOption(Long envId, PageRequest pageRequest, String params, Long appServiceId) {
+    public Page<DevopsSecretDTO> basePageByOption(Long envId, PageRequest pageable, String params, Long appServiceId) {
         Map<String, Object> paramsMap = TypeUtil.castMapParams(params);
         Map<String, Object> searchParamMap = TypeUtil.cast(paramsMap.get(TypeUtil.SEARCH_PARAM));
         List<String> paramList = TypeUtil.cast(paramsMap.get(TypeUtil.PARAMS));
-        return PageHelper
-                .startPage(pageRequest.getPage(), pageRequest.getSize(), PageRequestUtil.getOrderBy(pageRequest)).doSelectPageInfo(() -> devopsSecretMapper.listByOption(envId, searchParamMap, paramList, appServiceId));
+        return PageHelper.doPageAndSort(PageRequestUtil.simpleConvertSortForPage(pageable), () -> devopsSecretMapper.listByOption(envId, searchParamMap, paramList, appServiceId));
     }
 
     @Override
@@ -512,4 +520,10 @@ public class DevopsSecretServiceImpl implements DevopsSecretService {
         return encodedSecretMaps;
     }
 
+    @Override
+    public void baseDeleteSecretByEnvId(Long envId) {
+        DevopsSecretDTO devopsSecretDTO = new DevopsSecretDTO();
+        devopsSecretDTO.setEnvId(envId);
+        devopsSecretMapper.delete(devopsSecretDTO);
+    }
 }

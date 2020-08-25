@@ -1,14 +1,9 @@
 package io.choerodon.devops.app.service.impl;
 
 import java.io.File;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.stream.Collectors;
 
-import com.github.pagehelper.PageHelper;
-import com.github.pagehelper.PageInfo;
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 import org.springframework.beans.BeanUtils;
@@ -17,25 +12,31 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.CollectionUtils;
+import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 
-import io.choerodon.base.domain.PageRequest;
+import io.choerodon.core.domain.Page;
 import io.choerodon.core.exception.CommonException;
+import io.choerodon.devops.api.vo.ProjectCertificationCreateUpdateVO;
 import io.choerodon.devops.api.vo.ProjectCertificationPermissionUpdateVO;
 import io.choerodon.devops.api.vo.ProjectCertificationVO;
 import io.choerodon.devops.api.vo.ProjectReqVO;
 import io.choerodon.devops.app.service.CertificationService;
 import io.choerodon.devops.app.service.DevopsCertificationProRelationshipService;
 import io.choerodon.devops.app.service.DevopsProjectCertificationService;
+import io.choerodon.devops.app.service.SendNotificationService;
+import io.choerodon.devops.infra.constant.MiscConstants;
 import io.choerodon.devops.infra.dto.CertificationDTO;
 import io.choerodon.devops.infra.dto.CertificationFileDTO;
 import io.choerodon.devops.infra.dto.DevopsCertificationProRelationshipDTO;
-import io.choerodon.devops.infra.dto.iam.OrganizationDTO;
 import io.choerodon.devops.infra.dto.iam.ProjectDTO;
+import io.choerodon.devops.infra.dto.iam.Tenant;
 import io.choerodon.devops.infra.feign.operator.BaseServiceClientOperator;
 import io.choerodon.devops.infra.mapper.DevopsCertificationFileMapper;
 import io.choerodon.devops.infra.mapper.DevopsCertificationMapper;
 import io.choerodon.devops.infra.util.*;
+import io.choerodon.mybatis.pagehelper.PageHelper;
+import io.choerodon.mybatis.pagehelper.domain.PageRequest;
 
 @Service
 public class DevopsProjectCertificationServiceImpl implements DevopsProjectCertificationService {
@@ -44,7 +45,7 @@ public class DevopsProjectCertificationServiceImpl implements DevopsProjectCerti
     private static final String FILE_SEPARATOR = System.getProperty("file.separator");
     private static final String ERROR_CERTIFICATION_NOT_EXIST = "error.certification.not.exist";
 
-    private Gson gson = new Gson();
+    private final Gson gson = new Gson();
     @Autowired
     private DevopsCertificationProRelationshipService devopsCertificationProRelationshipService;
     @Autowired
@@ -55,6 +56,8 @@ public class DevopsProjectCertificationServiceImpl implements DevopsProjectCerti
     private DevopsCertificationMapper devopsCertificationMapper;
     @Autowired
     private DevopsCertificationFileMapper devopsCertificationFileMapper;
+    @Autowired
+    private SendNotificationService sendNotificationService;
 
     @Transactional(propagation = Propagation.REQUIRED)
     @Override
@@ -102,7 +105,7 @@ public class DevopsProjectCertificationServiceImpl implements DevopsProjectCerti
     }
 
     @Override
-    public PageInfo<ProjectReqVO> pageRelatedProjects(Long projectId, Long certId, PageRequest pageRequest, String params) {
+    public Page<ProjectReqVO> pageRelatedProjects(Long projectId, Long certId, PageRequest pageable, String params) {
         CertificationDTO certificationDTO = certificationService.baseQueryById(certId);
         if (certificationDTO == null) {
             throw new CommonException(ERROR_CERTIFICATION_NOT_EXIST, certId);
@@ -110,11 +113,16 @@ public class DevopsProjectCertificationServiceImpl implements DevopsProjectCerti
 
         Map<String, Object> map = TypeUtil.castMapParams(params);
         List<String> paramList = TypeUtil.cast(map.get(TypeUtil.PARAMS));
-        if (CollectionUtils.isEmpty(paramList)) {
+        Map<String, Object> searchParamsMap = TypeUtil.cast(map.get(TypeUtil.SEARCH_PARAM));
+        String name = null;
+        String code = null;
+        if (!CollectionUtils.isEmpty(searchParamsMap)) {
+            name = TypeUtil.cast(searchParamsMap.get("name"));
+            code = TypeUtil.cast(searchParamsMap.get("code"));
+        }
+        if (CollectionUtils.isEmpty(paramList) && StringUtils.isEmpty(name) && StringUtils.isEmpty(code)) {
             // 如果不搜索，在数据库中进行分页
-            PageInfo<DevopsCertificationProRelationshipDTO> relationPage = PageHelper.startPage(
-                    pageRequest.getPage(), pageRequest.getSize())
-                    .doSelectPageInfo(() -> devopsCertificationProRelationshipService.baseListByCertificationId(certId));
+            Page<DevopsCertificationProRelationshipDTO> relationPage = PageHelper.doPage(pageable, () -> devopsCertificationProRelationshipService.baseListByCertificationId(certId));
             return ConvertUtils.convertPage(relationPage, permission -> {
                 ProjectDTO projectDTO = baseServiceClientOperator.queryIamProjectById(permission.getProjectId());
                 return new ProjectReqVO(permission.getProjectId(), projectDTO.getName(), projectDTO.getCode());
@@ -126,7 +134,7 @@ public class DevopsProjectCertificationServiceImpl implements DevopsProjectCerti
             // 手动查出所有组织下的项目
             List<ProjectDTO> filteredProjects = baseServiceClientOperator.listIamProjectByOrgId(
                     iamProjectDTO.getOrganizationId(),
-                    null, null,
+                    name, code,
                     paramList.get(0));
 
             // 数据库中的有权限的项目
@@ -142,7 +150,7 @@ public class DevopsProjectCertificationServiceImpl implements DevopsProjectCerti
                     .map(p -> ConvertUtils.convertObject(p, ProjectReqVO.class))
                     .collect(Collectors.toList());
 
-            return PageInfoUtil.createPageFromList(allMatched, pageRequest);
+            return PageInfoUtil.createPageFromList(allMatched, pageable);
         }
     }
 
@@ -163,10 +171,14 @@ public class DevopsProjectCertificationServiceImpl implements DevopsProjectCerti
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public void createOrUpdate(Long projectId, MultipartFile key, MultipartFile cert, ProjectCertificationVO projectCertificationVO) {
+    public void createOrUpdate(Long projectId, MultipartFile key, MultipartFile cert, ProjectCertificationCreateUpdateVO createUpdateVO) {
+        // 特殊情况的主键加密手动处理
+        ProjectCertificationVO projectCertificationVO = ConvertUtils.convertObject(createUpdateVO, ProjectCertificationVO.class);
+        projectCertificationVO.setId(KeyDecryptHelper.decryptValue(createUpdateVO.getId()));
+
         ProjectDTO projectDTO = baseServiceClientOperator.queryIamProjectById(projectId);
-        OrganizationDTO organizationDTO = baseServiceClientOperator.queryOrganizationById(projectDTO.getOrganizationId());
-        String path = String.format("tmp%s%s%s%s", FILE_SEPARATOR, organizationDTO.getCode(), FILE_SEPARATOR, GenerateUUID.generateUUID().substring(0, 5));
+        Tenant organizationDTO = baseServiceClientOperator.queryOrganizationById(projectDTO.getOrganizationId());
+        String path = String.format("tmp%s%s%s%s", FILE_SEPARATOR, organizationDTO.getTenantNum(), FILE_SEPARATOR, GenerateUUID.generateUUID().substring(0, 5));
         String certFileName;
         String keyFileName;
         //如果是选择上传文件方式
@@ -199,7 +211,7 @@ public class DevopsProjectCertificationServiceImpl implements DevopsProjectCerti
             certificationDTO.setName(projectCertificationVO.getName());
             certificationDTO.setProjectId(projectId);
             // 创建项目层证书需要组织id
-            certificationDTO.setOrganizationId(organizationDTO.getId());
+            certificationDTO.setOrganizationId(organizationDTO.getTenantId());
             certificationDTO.setSkipCheckProjectPermission(true);
             certificationDTO.setDomains(gson.toJson(Collections.singletonList(projectCertificationVO.getDomain())));
             certificationDTO.setCertificationFileId(certificationService.baseStoreCertFile(new CertificationFileDTO(projectCertificationVO.getCertValue(), projectCertificationVO.getKeyValue())));
@@ -218,26 +230,35 @@ public class DevopsProjectCertificationServiceImpl implements DevopsProjectCerti
         }
     }
 
-
     @Override
-    public void checkName(Long projectId, String name) {
-        if (certificationService.baseQueryByProjectAndName(projectId, name) != null) {
-            throw new CommonException("error.cert.name.exist");
-        }
+    public boolean isNameUnique(Long projectId, String name) {
+        CertificationDTO certificationDTO = new CertificationDTO();
+        certificationDTO.setName(name);
+        certificationDTO.setProjectId(projectId);
+        return devopsCertificationMapper.selectCount(certificationDTO) == 0;
     }
 
     @Override
-    public List<ProjectReqVO> listNonRelatedMembers(Long projectId, Long certId, String params) {
+    public Page<ProjectReqVO> listNonRelatedMembers(Long projectId, Long certId, Long selectedProjectId, PageRequest pageable, String params) {
         CertificationDTO certificationDTO = certificationService.baseQueryById(certId);
         if (certificationDTO == null) {
             throw new CommonException(ERROR_CERTIFICATION_NOT_EXIST, certId);
         }
 
+        Map<String, String> searchParamMap = new HashMap<>();
+        List<String> paramList = new ArrayList<>();
+        if (!StringUtils.isEmpty(params)) {
+            Map maps = gson.fromJson(params, Map.class);
+            searchParamMap = Optional.ofNullable((Map) TypeUtil.cast(maps.get(TypeUtil.SEARCH_PARAM))).orElse(new HashMap<>());
+            paramList = Optional.ofNullable((List) TypeUtil.cast(maps.get(TypeUtil.PARAMS))).orElse(new ArrayList<>());
+        }
         //查询出该项目所属组织下的所有项目
-        Map<String, Object> searchMap = TypeUtil.castMapParams(params);
         ProjectDTO iamProjectDTO = baseServiceClientOperator.queryIamProjectById(projectId);
-        OrganizationDTO organizationDTO = baseServiceClientOperator.queryOrganizationById(iamProjectDTO.getOrganizationId());
-        List<ProjectDTO> projectDTOList = baseServiceClientOperator.listIamProjectByOrgId(organizationDTO.getId());
+        Tenant organizationDTO = baseServiceClientOperator.queryOrganizationById(iamProjectDTO.getOrganizationId());
+        List<ProjectDTO> projectDTOList = baseServiceClientOperator.listIamProjectByOrgId(organizationDTO.getTenantId(),
+                searchParamMap.get("name"),
+                searchParamMap.get("code"),
+                CollectionUtils.isEmpty(paramList) ? null : paramList.get(0));
 
         //查询已经分配权限的项目
         List<Long> permitted = devopsCertificationProRelationshipService.baseListByCertificationId(certId)
@@ -246,17 +267,32 @@ public class DevopsProjectCertificationServiceImpl implements DevopsProjectCerti
                 .collect(Collectors.toList());
 
         //把组织下有权限的项目过滤掉再返回
-        return projectDTOList.stream()
+        List<ProjectReqVO> nonRelatedMembers = projectDTOList.stream()
                 .filter(i -> !permitted.contains(i.getId()))
-                .map(i -> new ProjectReqVO(i.getId(), i.getName(), i.getCode(), null))
+                .map(i -> new ProjectReqVO(i.getId(), i.getName(), i.getCode()))
                 .collect(Collectors.toList());
+
+        if (selectedProjectId != null) {
+            ProjectDTO selectedProjectDTO = baseServiceClientOperator.queryIamProjectById(selectedProjectId);
+            ProjectReqVO projectReqVO = new ProjectReqVO(selectedProjectDTO.getId(), selectedProjectDTO.getName(), selectedProjectDTO.getCode());
+            if (!nonRelatedMembers.isEmpty()) {
+                nonRelatedMembers.remove(projectReqVO);
+                nonRelatedMembers.add(0, projectReqVO);
+            } else {
+                nonRelatedMembers.add(projectReqVO);
+            }
+        }
+
+        return PageInfoUtil.createPageFromList(nonRelatedMembers, pageable);
     }
 
     @Override
-    public void deleteCert(Long certId) {
-        if (certificationService.baseQueryById(certId) == null) {
+    public void deleteCert(Long projectId, Long certId) {
+        CertificationDTO certificationDTO = certificationService.baseQueryById(certId);
+        if (certificationDTO == null) {
             return;
         }
+        CommonExAssertUtil.assertTrue(projectId.equals(certificationDTO.getProjectId()), MiscConstants.ERROR_OPERATING_RESOURCE_IN_OTHER_PROJECT);
 
         List<CertificationDTO> certificationDTOS = certificationService.baseListByOrgCertId(certId);
         if (certificationDTOS.isEmpty()) {
@@ -279,23 +315,28 @@ public class DevopsProjectCertificationServiceImpl implements DevopsProjectCerti
     }
 
     @Override
-    public PageInfo<ProjectCertificationVO> pageCerts(Long projectId, PageRequest pageRequest,
-                                                      String params) {
-        PageInfo<CertificationDTO> certificationDTOS = certificationService
-                .basePage(projectId, null, pageRequest, params);
-        PageInfo<ProjectCertificationVO> orgCertificationDTOS = new PageInfo<>();
+    public Page<ProjectCertificationVO> pageCerts(Long projectId, PageRequest pageable,
+                                                  String params) {
+        Page<CertificationDTO> certificationDTOS = certificationService
+                .basePage(projectId, null, pageable, params);
+        Page<ProjectCertificationVO> orgCertificationDTOS = new Page<>();
         BeanUtils.copyProperties(certificationDTOS, orgCertificationDTOS);
         List<ProjectCertificationVO> orgCertifications = new ArrayList<>();
 
-        if (!certificationDTOS.getList().isEmpty()) {
-            certificationDTOS.getList().forEach(certificationDTO -> {
+        if (!certificationDTOS.getContent().isEmpty()) {
+            certificationDTOS.getContent().forEach(certificationDTO -> {
                 List<String> stringList = gson.fromJson(certificationDTO.getDomains(), new TypeToken<List<String>>() {
                 }.getType());
-                ProjectCertificationVO orgCertificationVO = new ProjectCertificationVO(certificationDTO.getId(), certificationDTO.getName(), stringList.get(0), certificationDTO.getSkipCheckProjectPermission(), certificationDTO.getObjectVersionNumber());
+                ProjectCertificationVO orgCertificationVO = new ProjectCertificationVO();
+                orgCertificationVO.setId(certificationDTO.getId());
+                orgCertificationVO.setName(certificationDTO.getName());
+                orgCertificationVO.setDomain(stringList.get(0));
+                orgCertificationVO.setSkipCheckProjectPermission(certificationDTO.getSkipCheckProjectPermission());
+                orgCertificationVO.setObjectVersionNumber(certificationDTO.getObjectVersionNumber());
                 orgCertifications.add(orgCertificationVO);
             });
         }
-        orgCertificationDTOS.setList(orgCertifications);
+        orgCertificationDTOS.setContent(orgCertifications);
         return orgCertificationDTOS;
     }
 
@@ -304,6 +345,14 @@ public class DevopsProjectCertificationServiceImpl implements DevopsProjectCerti
         CertificationDTO certificationDTO = devopsCertificationMapper.queryById(certId);
         List<String> stringList = gson.fromJson(certificationDTO.getDomains(), new TypeToken<List<String>>() {
         }.getType());
-        return new ProjectCertificationVO(certificationDTO.getId(), certificationDTO.getName(), stringList.get(0), certificationDTO.getSkipCheckProjectPermission(), certificationDTO.getObjectVersionNumber(), certificationDTO.getKeyValue(), certificationDTO.getCertValue());
+        ProjectCertificationVO projectCertificationVO = new ProjectCertificationVO();
+        projectCertificationVO.setId(certificationDTO.getId());
+        projectCertificationVO.setName(certificationDTO.getName());
+        projectCertificationVO.setDomain(stringList.get(0));
+        projectCertificationVO.setSkipCheckProjectPermission(certificationDTO.getSkipCheckProjectPermission());
+        projectCertificationVO.setObjectVersionNumber(certificationDTO.getObjectVersionNumber());
+        projectCertificationVO.setKeyValue(certificationDTO.getKeyValue());
+        projectCertificationVO.setCertValue(certificationDTO.getCertValue());
+        return projectCertificationVO;
     }
 }

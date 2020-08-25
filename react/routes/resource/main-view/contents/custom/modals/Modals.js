@@ -7,7 +7,8 @@ import HeaderButtons from '../../../../../../components/header-buttons';
 import { useResourceStore } from '../../../../stores';
 import { useModalStore } from './stores';
 import { useCustomStore } from '../stores';
-import CustomForm from './form-view';
+// import CustomForm from './form-view';
+import CustomForm from './form-view/formViewPro';
 import { useMainStore } from '../../../stores';
 
 const modalKey = Modal.key();
@@ -60,6 +61,7 @@ const CustomModals = observer(() => {
     const disabled = !connect;
 
     return ([{
+      permissions: ['choerodon.code.project.deploy.app-deployment.resource.ps.customize-resource'],
       name: formatMessage({ id: `${intlPrefix}.create.custom` }),
       icon: 'playlist_add',
       handler: openModal,

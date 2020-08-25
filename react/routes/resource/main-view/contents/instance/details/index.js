@@ -79,6 +79,7 @@ export default class Details extends Component {
       },
     } = this.context;
     const result = await detailsStore.loadDeploymentsJson(type, projectId, id, name);
+    detailsStore.loadDeploymentsYaml(type, projectId, id, name);
     if (result) {
       this.setState({ visible: true });
     }
@@ -94,10 +95,12 @@ export default class Details extends Component {
     } = this.context;
     let status;
     let connect;
+    let instanceStatus;
     const record = baseDs.current;
     if (record) {
-      status = record.get('status');
+      status = record.get('effectCommandStatus');
       connect = record.get('connect');
+      instanceStatus = record.get('status');
     }
     const { isDisabled } = this.state;
     const {
@@ -199,6 +202,7 @@ export default class Details extends Component {
             </div>
             <Button
               className="c7ncd-detail-btn"
+              type="primary"
               onClick={isDisabled ? null : () => this.handleClick(podType, instanceId, name)}
             >
               <FormattedMessage id="detailMore" />
@@ -211,6 +215,7 @@ export default class Details extends Component {
             count={podCount}
             targetCount={targetCount}
             status={status}
+            instanceStatus={instanceStatus}
             handleChangeCount={this.changeTargetCount}
             store={detailsStore}
             envId={envId}
@@ -238,7 +243,7 @@ export default class Details extends Component {
     if (!resources || !resources.length) return null;
     const TYPE_KEY = {
       serviceVOS: ['type', 'age', 'externalIp', 'port', 'clusterIp'],
-      ingressVOS: ['type', 'age', 'address', 'ports'],
+      ingressVOS: ['hosts', 'age', 'address', 'ports', 'services'],
       persistentVolumeClaimVOS: ['status', 'age', 'accessModes', 'capacity'],
     };
 
@@ -261,6 +266,28 @@ export default class Details extends Component {
               <span className={`c7ncd-deploy-pvc c7ncd-deploy-pvc_${data[key]}`}>
                 {data[key]}
               </span>
+            );
+            break;
+          case 'services':
+            text = (<Fragment>
+              <span className="c7ncd-instance-details-value">
+                {_.head(data[key])}
+              </span>
+              {data[key].length > 1 && <Popover
+                arrowPointAtCenter
+                placement="bottom"
+                getPopupContainer={(triggerNode) => triggerNode.parentNode}
+                content={_.map(_.tail(data[key]), (ingress) => <div className="c7ncd-deployment-popover-port" key={ingress}>{ingress}</div>)}
+              >
+                <Icon type="expand_more" className="c7ncd-deployment-icon-more" />
+              </Popover>}
+            </Fragment>);
+            break;
+          case 'hosts':
+            text = (
+              <Tooltip title={data[key]}>
+                <span>{data[key]}</span>
+              </Tooltip>
             );
             break;
           default:

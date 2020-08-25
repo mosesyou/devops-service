@@ -8,7 +8,7 @@ import EnvItem from '../../../../../components/env-item';
 import Modals from './modals';
 import { useResourceStore } from '../../../stores';
 import { useREStore } from './stores';
-import DosageTable from './DosageTable';
+import SyncSituation from './sync-situation';
 
 import './index.less';
 import openWarnModal from '../../../../../utils/openWarnModal';
@@ -158,8 +158,8 @@ const Content = observer(() => {
     if (record) {
       const name = record.get('name');
       const connect = record.get('connect');
-
-      return <EnvItem isTitle connect={connect} name={name} />;
+      const clusterName = record.get('clusterName');
+      return <EnvItem isTitle connect={connect} name={name} formatMessage={formatMessage} clusterName={clusterName} />;
     }
     return null;
   }
@@ -189,7 +189,7 @@ const Content = observer(() => {
           </div>
         </div>
       </Spin>
-      <DosageTable />
+      <SyncSituation />
       <Modals />
     </div>
   );

@@ -2,17 +2,21 @@ package io.choerodon.devops.infra.dto;
 
 import javax.persistence.*;
 
-import io.choerodon.mybatis.entity.BaseDTO;
+import io.choerodon.mybatis.annotation.ModifyAudit;
+import io.choerodon.mybatis.annotation.VersionAudit;
+import io.choerodon.mybatis.domain.AuditDomain;
 
 /**
  * Creator: ChangpingShi0213@gmail.com
  * Date:  19:08 2019/4/3
  * Description:
  */
+@ModifyAudit
+@VersionAudit
 @Table(name = "devops_pipeline")
-public class PipelineDTO extends BaseDTO {
+public class PipelineDTO extends AuditDomain {
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @GeneratedValue(strategy = GenerationType.AUTO)
     private Long id;
     private String name;
     private String triggerType;
@@ -21,6 +25,16 @@ public class PipelineDTO extends BaseDTO {
 
     @Transient
     private Boolean execute;
+    @Transient
+    private String envName;
+
+    public String getEnvName() {
+        return envName;
+    }
+
+    public void setEnvName(String envName) {
+        this.envName = envName;
+    }
 
     public Boolean getExecute() {
         return execute;

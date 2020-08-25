@@ -17,9 +17,12 @@ const Environment = asyncRouter(() => import('./routes/environment'));
 const Reports = asyncRouter(() => import('./routes/reports'));
 const Repository = asyncRouter(() => import('./routes/repository'));
 const ProRepository = asyncRouter(() => import('./routes/pro-repository'));
+const PVManager = asyncRouter(() => import('./routes/pv-manager'));
+const PipelineManage = asyncRouter(() => import('./routes/pipeline-manage'));
+const DDD = asyncRouter(() => import('./routes/ddd'));
 
 function DEVOPSIndex({ match, AppState: { currentLanguage: language } }) {
-  const IntlProviderAsync = asyncLocaleProvider(language, () => import(`./locale/${language}`),);
+  const IntlProviderAsync = asyncLocaleProvider(language, () => import(`./locale/${language}`));
   return (
     <IntlProviderAsync>
       <div className="c7ncd-root">
@@ -28,6 +31,7 @@ function DEVOPSIndex({ match, AppState: { currentLanguage: language } }) {
           <Route path={`${match.url}/code-management`} component={Code} />
           <Route path={`${match.url}/resource`} component={Resource} />
           <Route path={`${match.url}/deployment-operation`} component={Deployment} />
+          <Route path={`${match.url}/pipeline-manage`} component={PipelineManage} />
           <Route path={`${match.url}/pipeline`} component={Pipeline} />
           <Route path={`${match.url}/environment`} component={Environment} />
           <Route path={`${match.url}/cert-management`} component={Certificate} />
@@ -35,6 +39,7 @@ function DEVOPSIndex({ match, AppState: { currentLanguage: language } }) {
           <Route path={`${match.url}/repository`} component={Repository} />
           <Route path={`${match.url}/project-repository`} component={ProRepository} />
           <Route path={`${match.url}/reports`} component={Reports} />
+          <Route path={`${match.url}/pv-management`} component={PVManager} />
           <Route path="*" component={nomatch} />
         </Switch>
         <ModalContainer />

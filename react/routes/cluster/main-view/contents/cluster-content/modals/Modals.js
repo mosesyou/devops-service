@@ -31,7 +31,7 @@ const ClusterModals = observer(() => {
   } = useClusterStore();
   const {
     contentStore,
-    tabs: { NODE_TAB, ASSIGN_TAB },
+    tabs: { NODE_TAB, ASSIGN_TAB, COMPONENT_TAB, MONITOR_TAB },
     PermissionDs,
     NodeListDs,
     ClusterDetailDs,
@@ -62,14 +62,25 @@ const ClusterModals = observer(() => {
   function refresh() {
     resreshTree();
     ClusterDetailDs.query();
-    if (getTabKey === NODE_TAB) {
-      NodeListDs.query();
-    } else {
-      PermissionDs.query();
+    switch (getTabKey) {
+      case NODE_TAB:
+        NodeListDs.query();
+        break;
+      case ASSIGN_TAB:
+        PermissionDs.query();
+        break;
+      case COMPONENT_TAB:
+        contentStore.loadComponentList(projectId, id);
+        break;
+      case MONITOR_TAB:
+        contentStore.loadGrafanaUrl(projectId, id);
+        break;
+      default:
     }
   }
   function resreshTree() {
     treeDs.query();
+    mainStore.checkCreate(projectId);
   }
 
   function refreshPermission() {
@@ -90,7 +101,6 @@ const ClusterModals = observer(() => {
   }
 
   function openPermission() {
-    const arr = NonPermissionDs.toData();
     Modal.open({
       key: modalKey2,
       title: <Tips
@@ -102,28 +112,31 @@ const ClusterModals = observer(() => {
       className: 'c7ncd-modal-wrapper',
       children: <PermissionManage
         refreshPermission={refreshPermission}
-        projectList={arr}
         onOk={permissionUpdate}
         clusterDetail={ClusterDetailDs.current}
         intlPrefix={intlPrefix}
         prefixCls={prefixCls}
         formatMessage={formatMessage}
+        PermissionDs={PermissionDs}
+        NonPermissionDs={NonPermissionDs}
       />,
     });
   }
 
   function getButtons() {
+    const { getCanCreate } = mainStore;
     return [{
       name: formatMessage({ id: `${intlPrefix}.modal.create` }),
-      permissions: ['devops-service.devops-cluster.create'],
+      permissions: ['choerodon.code.project.deploy.cluster.cluster-management.ps.create'],
       icon: 'playlist_add',
       handler: openCreate,
       display: true,
       group: 1,
+      disabled: !getCanCreate,
+      disabledMessage: formatMessage({ id: `${intlPrefix}.modal.create.disabled` }),
     }, {
       name: formatMessage({ id: `${intlPrefix}.modal.permission` }),
-      permissions: ['devops-service.devops-cluster.assignPermission', 'devops-service.devops-cluster.checkName',
-        'devops-service.devops-cluster.checkCode'],
+      permissions: ['choerodon.code.project.deploy.cluster.cluster-management.ps.permission-manage'],
       icon: 'authority',
       handler: openPermission,
       display: true,

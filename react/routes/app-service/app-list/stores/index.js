@@ -3,11 +3,8 @@ import { inject } from 'mobx-react';
 import { injectIntl } from 'react-intl';
 import { DataSet } from 'choerodon-ui/pro';
 import { useAppTopStore } from '../../stores';
-import ImportDataSet from './ImportDataSet';
-import ImportTableDataSet from './ImportTableDataSet';
-import selectedDataSet from './SelectedDataSet';
-import ListDataSet from '../../stores/ListDataSet';
-import getTablePostData from '../../../../utils/getTablePostData';
+import ListDataSet from './ListDataSet';
+import useStore from './useStore';
 
 const Store = createContext();
 
@@ -23,30 +20,17 @@ export const StoreProvider = injectIntl(inject('AppState')(
       children,
     } = props;
     const { intlPrefix } = useAppTopStore();
-    const importTableDs = useMemo(() => new DataSet(ImportTableDataSet(intlPrefix, formatMessage, projectId)), [formatMessage, projectId]);
-    const selectedDs = useMemo(() => new DataSet(selectedDataSet(intlPrefix, formatMessage, projectId)), [projectId]);
-    const importDs = useMemo(() => new DataSet(ImportDataSet(intlPrefix, formatMessage, projectId, selectedDs)), [formatMessage, projectId, selectedDs]);
-    const listDs = useMemo(() => new DataSet(ListDataSet(intlPrefix, formatMessage, projectId, 'list')), [projectId]);
+    const appListStore = useStore();
+    const listDs = useMemo(() => new DataSet(ListDataSet(intlPrefix, formatMessage, projectId)), [projectId]);
 
     useEffect(() => {
-      listDs.transport.read = ({ data }) => {
-        const postData = getTablePostData(data);
-
-        return {
-          url: `/devops/v1/projects/${projectId}/app_service/page_by_options`,
-          method: 'post',
-          data: postData,
-        };
-      };
-      listDs.query();
+      appListStore.checkCreate(projectId);
     }, [projectId]);
 
     const value = {
       ...props,
-      importDs,
-      importTableDs,
-      selectedDs,
       listDs,
+      appListStore,
     };
     return (
       <Store.Provider value={value}>

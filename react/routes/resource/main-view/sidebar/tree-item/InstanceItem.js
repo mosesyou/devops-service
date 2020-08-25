@@ -56,7 +56,7 @@ function InstanceItem({
   function freshMenu() {
     freshTree();
     const { getSelectedMenu: { itemType, parentId } } = resourceStore;
-    const [envId] = record.get('parentId').split('-');
+    const [envId] = record.get('parentId').split('**');
     if (itemType === IST_GROUP && envId === parentId) {
       resourceStore.setUpTarget({
         type: IST_GROUP,
@@ -69,7 +69,7 @@ function InstanceItem({
     return resourceStore.checkExist({
       projectId,
       type: 'instance',
-      envId: record.get('parentId').split('-')[0],
+      envId: record.get('parentId').split('**')[0],
       id: record.get('id'),
     }).then((isExist) => {
       if (!isExist) {
@@ -113,21 +113,26 @@ function InstanceItem({
   function getSuffix() {
     const istId = record.get('id');
     const istName = record.get('name');
-    const [envId] = record.get('parentId').split('-');
+    const [envId] = record.get('parentId').split('**');
+    const envRecord = treeDs.find((eachRecord) => eachRecord.get('key') === envId);
+    const connect = envRecord && envRecord.get('connect');
+    if (!connect) {
+      return;
+    }
     let actionData;
     const actionItems = {
       stop: {
-        service: ['devops-service.app-service-instance.stop'],
+        service: ['choerodon.code.project.deploy.app-deployment.resource.ps.stop'],
         text: formatMessage({ id: `${intlPrefix}.instance.action.stop` }),
         action: () => openChangeActive('stop'),
       },
       start: {
-        service: ['devops-service.app-service-instance.start'],
+        service: ['choerodon.code.project.deploy.app-deployment.resource.ps.start'],
         text: formatMessage({ id: `${intlPrefix}.instance.action.start` }),
         action: () => openChangeActive('start'),
       },
       delete: {
-        service: ['devops-service.app-service-instance.delete'],
+        service: ['choerodon.code.project.deploy.app-deployment.resource.ps.delete'],
         text: formatMessage({ id: `${intlPrefix}.instance.action.delete` }),
         action: () => openDeleteModal(envId, istId, istName, 'instance', freshMenu),
       },

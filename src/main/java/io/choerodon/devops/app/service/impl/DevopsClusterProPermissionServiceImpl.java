@@ -1,9 +1,14 @@
 package io.choerodon.devops.app.service.impl;
 
 import java.util.List;
+import java.util.Objects;
+
+import javax.annotation.Nullable;
 
 import io.choerodon.core.exception.CommonException;
 import io.choerodon.devops.app.service.DevopsClusterProPermissionService;
+import io.choerodon.devops.app.service.DevopsClusterService;
+import io.choerodon.devops.infra.dto.DevopsClusterDTO;
 import io.choerodon.devops.infra.dto.DevopsClusterProPermissionDTO;
 import io.choerodon.devops.infra.mapper.DevopsClusterProPermissionMapper;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -18,12 +23,35 @@ import org.springframework.transaction.annotation.Transactional;
 public class DevopsClusterProPermissionServiceImpl implements DevopsClusterProPermissionService {
     @Autowired
     private DevopsClusterProPermissionMapper devopsClusterProPermissionMapper;
+    @Autowired
+    private DevopsClusterService devopsClusterService;
 
     @Override
     public void baseInsertPermission(DevopsClusterProPermissionDTO devopsClusterProPermissionDTO) {
         if (devopsClusterProPermissionMapper.insert(devopsClusterProPermissionDTO) != 1) {
             throw new CommonException("error.devops.cluster.project.permission.add.error");
         }
+    }
+
+    @Nullable
+    @Override
+    public DevopsClusterProPermissionDTO queryPermission(Long projectId, Long clusterId) {
+        DevopsClusterProPermissionDTO devopsClusterProPermissionDTO = new DevopsClusterProPermissionDTO();
+        devopsClusterProPermissionDTO.setProjectId(Objects.requireNonNull(projectId));
+        devopsClusterProPermissionDTO.setClusterId(Objects.requireNonNull(clusterId));
+        return devopsClusterProPermissionMapper.selectOne(devopsClusterProPermissionDTO);
+    }
+
+    @Override
+    public boolean projectHasClusterPermission(Long projectId, Long clusterId) {
+        DevopsClusterDTO devopsClusterDTO = devopsClusterService.baseQuery(Objects.requireNonNull(clusterId));
+        if (devopsClusterDTO == null) {
+            throw new CommonException("error.cluster.not.exist", clusterId);
+        }
+        if (Boolean.TRUE.equals(devopsClusterDTO.getSkipCheckProjectPermission())) {
+            return true;
+        }
+        return queryPermission(projectId, clusterId) != null;
     }
 
     @Transactional(propagation = Propagation.REQUIRED)
@@ -36,6 +64,7 @@ public class DevopsClusterProPermissionServiceImpl implements DevopsClusterProPe
         DevopsClusterProPermissionDTO permission = new DevopsClusterProPermissionDTO();
         permission.setClusterId(clusterId);
         projectIds.forEach(p -> {
+            permission.setId(null);
             permission.setProjectId(p);
             if (devopsClusterProPermissionMapper.selectOne(permission) == null) {
                 devopsClusterProPermissionMapper.insert(permission);
@@ -51,14 +80,17 @@ public class DevopsClusterProPermissionServiceImpl implements DevopsClusterProPe
     }
 
     @Override
-    public void baseDeletePermission(DevopsClusterProPermissionDTO devopsClusterProPermissionDTO) {
+    public void baseDeletePermissionByClusterIdAndProjectId(Long clusterId, Long projectId) {
+        DevopsClusterProPermissionDTO devopsClusterProPermissionDTO = new DevopsClusterProPermissionDTO();
+        devopsClusterProPermissionDTO.setProjectId(Objects.requireNonNull(projectId));
+        devopsClusterProPermissionDTO.setClusterId(Objects.requireNonNull(clusterId));
         devopsClusterProPermissionMapper.delete(devopsClusterProPermissionDTO);
     }
 
     @Override
     public void baseDeleteByClusterId(Long clusterId) {
         DevopsClusterProPermissionDTO devopsClusterProPermissionDTO = new DevopsClusterProPermissionDTO();
-        devopsClusterProPermissionDTO.setClusterId(clusterId);
+        devopsClusterProPermissionDTO.setClusterId(Objects.requireNonNull(clusterId));
         devopsClusterProPermissionMapper.delete(devopsClusterProPermissionDTO);
     }
 }

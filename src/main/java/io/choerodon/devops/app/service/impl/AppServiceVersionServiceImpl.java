@@ -1,16 +1,18 @@
 package io.choerodon.devops.app.service.impl;
 
+import static io.choerodon.devops.app.eventhandler.constants.HarborRepoConstants.*;
+import static java.util.Comparator.comparing;
+import static java.util.stream.Collectors.collectingAndThen;
+import static java.util.stream.Collectors.toCollection;
+
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.util.*;
 import java.util.stream.Collectors;
+import javax.annotation.Nullable;
 
-import com.github.pagehelper.PageHelper;
-import com.github.pagehelper.PageInfo;
-import com.google.common.collect.Lists;
 import com.google.gson.Gson;
-import io.choerodon.devops.infra.enums.ProjectConfigType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.BeanUtils;
@@ -18,39 +20,45 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.util.CollectionUtils;
-import org.springframework.util.ObjectUtils;
 import org.springframework.web.multipart.MultipartFile;
 
-import io.choerodon.base.domain.PageRequest;
-import io.choerodon.base.domain.Sort;
+import io.choerodon.core.domain.Page;
 import io.choerodon.core.exception.CommonException;
 import io.choerodon.devops.api.vo.*;
 import io.choerodon.devops.app.service.*;
+import io.choerodon.devops.infra.constant.MiscConstants;
 import io.choerodon.devops.infra.dto.*;
 import io.choerodon.devops.infra.dto.iam.IamUserDTO;
-import io.choerodon.devops.infra.dto.iam.OrganizationDTO;
 import io.choerodon.devops.infra.dto.iam.ProjectDTO;
+import io.choerodon.devops.infra.dto.iam.Tenant;
+import io.choerodon.devops.infra.enums.ProjectConfigType;
 import io.choerodon.devops.infra.exception.DevopsCiInvalidException;
+import io.choerodon.devops.infra.feign.RdupmClient;
 import io.choerodon.devops.infra.feign.operator.BaseServiceClientOperator;
-import io.choerodon.devops.infra.mapper.AppServiceMapper;
-import io.choerodon.devops.infra.mapper.AppServiceVersionMapper;
-import io.choerodon.devops.infra.mapper.AppServiceVersionReadmeMapper;
+import io.choerodon.devops.infra.mapper.*;
 import io.choerodon.devops.infra.util.*;
-
-import static java.util.Comparator.comparing;
-import static java.util.stream.Collectors.collectingAndThen;
-import static java.util.stream.Collectors.toCollection;
+import io.choerodon.mybatis.pagehelper.PageHelper;
+import io.choerodon.mybatis.pagehelper.domain.PageRequest;
+import io.choerodon.mybatis.pagehelper.domain.Sort;
 
 @Service
 public class AppServiceVersionServiceImpl implements AppServiceVersionService {
     private static final Logger LOGGER = LoggerFactory.getLogger(AppServiceVersionServiceImpl.class);
 
-    private static final String DESTINATION_PATH = "devops";
-    private static final String STORE_PATH = "stores";
+    /**
+     * 存储chart包的文件路径模板
+     * devops-应用服务id-版本号-commit值前8位
+     */
+    private static final String DESTINATION_PATH_TEMPLATE = "devops-%s-%s-%s";
+    /**
+     * 解压chart包的文件路径模板
+     * stores-应用服务id-版本号-commit值前8位
+     */
+    private static final String STORE_PATH_TEMPLATE = "stores-%s-%s-%s";
+
     private static final String APP_SERVICE = "appService";
     private static final String CHART = "chart";
-    private static final String AUTHTYPE_PULL = "pull";
-
+    private static final String HARBOR_DEFAULT = "harbor_default";
     private static final String ERROR_VERSION_INSERT = "error.version.insert";
 
     @Value("${services.gitlab.url}")
@@ -88,59 +96,75 @@ public class AppServiceVersionServiceImpl implements AppServiceVersionService {
     private AppServiceMapper appServiceMapper;
     @Autowired
     private DevopsConfigService devopsConfigService;
+    @Autowired
+    private SendNotificationService sendNotificationService;
+    @Autowired
+    private RdupmClient rdupmClient;
+    @Autowired
+    private DevopsConfigMapper devopsConfigMapper;
+    @Autowired
+    private DevopsRegistrySecretMapper devopsRegistrySecretMapper;
 
 
-    private Gson gson = new Gson();
+    private static final Gson GSON = new Gson();
 
     /**
      * 方法中抛出{@link DevopsCiInvalidException}而不是{@link CommonException}是为了返回非200的状态码。
      */
     @Override
-    public void create(String image, String harborConfigId, String token, String version, String commit, MultipartFile files) {
+    public void create(String image, String harborConfigId, String repoType, String token, String version, String commit, MultipartFile files, String ref) {
         try {
-            doCreate(image, TypeUtil.objToLong(harborConfigId), token, version, commit, files);
+            doCreate(image, TypeUtil.objToLong(harborConfigId), repoType, token, version, commit, files, ref);
         } catch (Exception e) {
             if (e instanceof CommonException) {
-                throw new DevopsCiInvalidException(((CommonException) e).getCode(), e.getCause());
+                throw new DevopsCiInvalidException(((CommonException) e).getCode(), e, ((CommonException) e).getParameters());
             }
             throw new DevopsCiInvalidException(e);
         }
+
     }
 
-    private void doCreate(String image, Long harborConfigId, String token, String version, String commit, MultipartFile files) {
+    private void doCreate(String image, Long harborConfigId, String repoType, String token, String version, String commit, MultipartFile files, String ref) {
         AppServiceDTO appServiceDTO = appServiceMapper.queryByToken(token);
 
         AppServiceVersionValueDTO appServiceVersionValueDTO = new AppServiceVersionValueDTO();
         AppServiceVersionDTO appServiceVersionDTO = new AppServiceVersionDTO();
         ProjectDTO projectDTO = baseServiceClientOperator.queryIamProjectById(appServiceDTO.getProjectId());
-        OrganizationDTO organization = baseServiceClientOperator.queryOrganizationById(projectDTO.getOrganizationId());
+        Tenant organization = baseServiceClientOperator.queryOrganizationById(projectDTO.getOrganizationId());
         AppServiceVersionDTO newApplicationVersion = baseQueryByAppServiceIdAndVersion(appServiceDTO.getId(), version);
         appServiceVersionDTO.setAppServiceId(appServiceDTO.getId());
         appServiceVersionDTO.setImage(image);
         appServiceVersionDTO.setCommit(commit);
+        appServiceVersionDTO.setRef(ref);
         appServiceVersionDTO.setVersion(version);
+        //根据配置id 查询仓库是自定义还是默认
+//        HarborRepoDTO harborRepoDTO = rdupmClient.queryHarborRepoConfig(appServiceDTO.getProjectId(), appServiceDTO.getId()).getBody();
         appServiceVersionDTO.setHarborConfigId(harborConfigId);
+        appServiceVersionDTO.setRepoType(repoType);
 
-        DevopsConfigDTO devopsConfigDTO = devopsConfigService.queryRealConfig(appServiceDTO.getId(), APP_SERVICE, CHART,AUTHTYPE_PULL);
-        String helmUrl = gson.fromJson(devopsConfigDTO.getConfig(), ConfigVO.class).getUrl();
+        // 查询helm仓库配置id
+        DevopsConfigDTO devopsConfigDTO = devopsConfigService.queryRealConfig(appServiceDTO.getId(), APP_SERVICE, CHART, AUTH_TYPE_PULL);
+        ConfigVO helmConfig = GSON.fromJson(devopsConfigDTO.getConfig(), ConfigVO.class);
+        String helmUrl = helmConfig.getUrl();
         appServiceVersionDTO.setHelmConfigId(devopsConfigDTO.getId());
 
-        appServiceVersionDTO.setRepository(helmUrl.endsWith("/") ? helmUrl + organization.getCode() + "/" + projectDTO.getCode() + "/" : helmUrl + "/" + organization.getCode() + "/" + projectDTO.getCode() + "/");
-        String storeFilePath = STORE_PATH + version;
+        appServiceVersionDTO.setRepository(helmUrl.endsWith("/") ? helmUrl + organization.getTenantNum() + "/" + projectDTO.getCode() + "/" : helmUrl + "/" + organization.getTenantNum() + "/" + projectDTO.getCode() + "/");
 
-        String destFilePath = DESTINATION_PATH + version;
+        // 取commit的一部分作为文件路径
+        String commitPart = commit == null ? "" : commit.substring(0, 8);
+
+        String storeFilePath = String.format(STORE_PATH_TEMPLATE, appServiceDTO.getId(), version, commitPart);
+        String destFilePath = String.format(DESTINATION_PATH_TEMPLATE, appServiceDTO.getId(), version, commitPart);
+
         String path = FileUtil.multipartFileToFile(storeFilePath, files);
-        //上传chart包到chartmuseum
-        chartUtil.uploadChart(helmUrl, organization.getCode(), projectDTO.getCode(), new File(path));
 
-        // 有需求让重新上传chart包，所以校验重复推后
-        if (newApplicationVersion != null) {
-            FileUtil.deleteDirectories(storeFilePath);
-            return;
-        }
+        //上传chart包到chartmuseum
+        chartUtil.uploadChart(helmUrl, organization.getTenantNum(), projectDTO.getCode(), new File(path), helmConfig.getUserName(), helmConfig.getPassword());
+
         FileUtil.unTarGZ(path, destFilePath);
 
-        File valuesFile = FileUtil.queryFileFromFiles(new File(destFilePath), "values.yaml");
+        // 使用深度优先遍历查找文件, 避免查询到子chart的values值
+        File valuesFile = FileUtil.queryFileFromFilesBFS(new File(destFilePath), "values.yaml");
 
         if (valuesFile == null) {
             FileUtil.deleteDirectories(storeFilePath, destFilePath);
@@ -153,6 +177,17 @@ public class AppServiceVersionServiceImpl implements AppServiceVersionService {
         } catch (IOException e) {
             FileUtil.deleteDirectories(storeFilePath, destFilePath);
             throw new CommonException(e);
+        }
+
+        // 有需求让重新上传chart包，所以校验重复推后
+        if (newApplicationVersion != null) {
+            try {
+                // 重新上传chart包后更新values
+                updateValues(newApplicationVersion.getValueId(), values);
+            } finally {
+                FileUtil.deleteDirectories(storeFilePath);
+            }
+            return;
         }
 
         try {
@@ -180,6 +215,25 @@ public class AppServiceVersionServiceImpl implements AppServiceVersionService {
         FileUtil.deleteDirectories(destFilePath, storeFilePath);
         //流水线
         checkAutoDeploy(appServiceVersionDTO);
+        //生成版本成功后发送webhook json
+        sendNotificationService.sendWhenAppServiceVersion(appServiceVersionDTO, appServiceDTO, projectDTO);
+    }
+
+    private void updateValues(Long oldValuesId, String values) {
+        AppServiceVersionValueDTO appServiceVersionValueDTO = new AppServiceVersionValueDTO();
+        appServiceVersionValueDTO.setId(oldValuesId);
+
+        AppServiceVersionValueDTO old = appServiceVersionValueService.baseQuery(oldValuesId);
+
+        if (old == null) {
+            return;
+        }
+
+        // values变了才更新
+        if (!Objects.equals(old.getValue(), values)) {
+            appServiceVersionValueDTO.setValue(values);
+            appServiceVersionValueService.baseUpdate(appServiceVersionValueDTO);
+        }
     }
 
     /**
@@ -255,58 +309,30 @@ public class AppServiceVersionServiceImpl implements AppServiceVersionService {
     }
 
     @Override
-    public PageInfo<AppServiceVersionVO> pageByOptions(Long projectId, Long appServiceId, Long appServiceVersionId, Boolean deployOnly, Boolean doPage, String params, PageRequest pageRequest, String version) {
+    public Page<AppServiceVersionVO> pageByOptions(Long projectId, Long appServiceId, Long appServiceVersionId, Boolean deployOnly, Boolean doPage, String params, PageRequest pageable, String version) {
         AppServiceDTO appServiceDTO = appServiceMapper.selectByPrimaryKey(appServiceId);
-        Boolean market = appServiceDTO.getMktAppId() != null;
-        PageInfo<AppServiceVersionDTO> applicationVersionDTOPageInfo = new PageInfo<>();
+        Page<AppServiceVersionDTO> applicationVersionDTOPageInfo;
         Map<String, Object> mapParams = TypeUtil.castMapParams(params);
-        if (!market) {
-            Boolean share = !(appServiceDTO.getProjectId() == null || appServiceDTO.getProjectId().equals(projectId));
-            if (doPage != null && doPage) {
-                applicationVersionDTOPageInfo = PageHelper.startPage(pageRequest.getPage(), pageRequest.getSize(), PageRequestUtil.getOrderBy(pageRequest))
-                        .doSelectPageInfo(() -> appServiceVersionMapper.listByAppServiceIdAndVersion(appServiceId,
-                                appServiceVersionId,
-                                projectId,
-                                share,
-                                deployOnly,
-                                TypeUtil.cast(mapParams.get(TypeUtil.SEARCH_PARAM)),
-                                TypeUtil.cast(mapParams.get(TypeUtil.PARAMS)),
-                                PageRequestUtil.checkSortIsEmpty(pageRequest), version));
-            } else {
-                applicationVersionDTOPageInfo = new PageInfo<>();
-                List<AppServiceVersionDTO> appServiceVersionDTOS = appServiceVersionMapper.listByAppServiceIdAndVersion(appServiceId, appServiceVersionId, projectId, share, deployOnly,
-                        TypeUtil.cast(mapParams.get(TypeUtil.SEARCH_PARAM)),
-                        TypeUtil.cast(mapParams.get(TypeUtil.PARAMS)),
-                        PageRequestUtil.checkSortIsEmpty(pageRequest), version);
-                if (doPage == null) {
-                    applicationVersionDTOPageInfo.setList(appServiceVersionDTOS.stream().limit(20).collect(Collectors.toList()));
-                } else {
-                    applicationVersionDTOPageInfo.setList(appServiceVersionDTOS);
-                }
-            }
+        Boolean share = !(appServiceDTO.getProjectId() == null || appServiceDTO.getProjectId().equals(projectId));
+        if (doPage != null && doPage) {
+            applicationVersionDTOPageInfo = PageHelper.doPageAndSort(PageRequestUtil.simpleConvertSortForPage(pageable), () -> appServiceVersionMapper.listByAppServiceIdAndVersion(appServiceId,
+                    appServiceVersionId,
+                    projectId,
+                    share,
+                    deployOnly,
+                    TypeUtil.cast(mapParams.get(TypeUtil.SEARCH_PARAM)),
+                    TypeUtil.cast(mapParams.get(TypeUtil.PARAMS)),
+                    PageRequestUtil.checkSortIsEmpty(pageable), version));
         } else {
-            ProjectDTO projectDTO = baseServiceClientOperator.queryIamProjectById(projectId);
-            List<Long> appServiceVersionIds = baseServiceClientOperator.listServiceVersionsForMarket(projectDTO.getOrganizationId(), deployOnly);
-            if (appServiceVersionIds != null && !appServiceVersionIds.isEmpty()) {
-                if (doPage != null && doPage) {
-                    applicationVersionDTOPageInfo = PageHelper.startPage(pageRequest.getPage(), pageRequest.getSize(), PageRequestUtil.getOrderBy(pageRequest))
-                            .doSelectPageInfo(() -> appServiceVersionMapper.listByAppServiceVersionIdForMarket(appServiceId,
-                                    appServiceVersionIds,
-                                    TypeUtil.cast(mapParams.get(TypeUtil.SEARCH_PARAM)),
-                                    TypeUtil.cast(mapParams.get(TypeUtil.PARAMS)),
-                                    PageRequestUtil.checkSortIsEmpty(pageRequest), version));
-                } else {
-                    applicationVersionDTOPageInfo = new PageInfo<>();
-                    List<AppServiceVersionDTO> appServiceVersionDTOS = appServiceVersionMapper.listByAppServiceVersionIdForMarket(appServiceId, appServiceVersionIds,
-                            TypeUtil.cast(mapParams.get(TypeUtil.SEARCH_PARAM)),
-                            TypeUtil.cast(mapParams.get(TypeUtil.PARAMS)),
-                            PageRequestUtil.checkSortIsEmpty(pageRequest), version);
-                    if (doPage == null) {
-                        applicationVersionDTOPageInfo.setList(appServiceVersionDTOS.stream().limit(20).collect(Collectors.toList()));
-                    } else {
-                        applicationVersionDTOPageInfo.setList(appServiceVersionDTOS);
-                    }
-                }
+            applicationVersionDTOPageInfo = new Page<>();
+            List<AppServiceVersionDTO> appServiceVersionDTOS = appServiceVersionMapper.listByAppServiceIdAndVersion(appServiceId, appServiceVersionId, projectId, share, deployOnly,
+                    TypeUtil.cast(mapParams.get(TypeUtil.SEARCH_PARAM)),
+                    TypeUtil.cast(mapParams.get(TypeUtil.PARAMS)),
+                    PageRequestUtil.checkSortIsEmpty(pageable), version);
+            if (doPage == null) {
+                applicationVersionDTOPageInfo.setContent(appServiceVersionDTOS.stream().limit(20).collect(Collectors.toList()));
+            } else {
+                applicationVersionDTOPageInfo.setContent(appServiceVersionDTOS);
             }
         }
         return ConvertUtils.convertPage(applicationVersionDTOPageInfo, AppServiceVersionVO.class);
@@ -386,7 +412,7 @@ public class AppServiceVersionServiceImpl implements AppServiceVersionService {
         List<AppServiceVersionDTO> appServiceVersionDTOS = baseListByAppServiceIdAndBranch(appServiceId, branch);
         AppServiceDTO applicationDTO = applicationService.baseQuery(appServiceId);
         ProjectDTO projectDTO = baseServiceClientOperator.queryIamProjectById(applicationDTO.getProjectId());
-        OrganizationDTO organization = baseServiceClientOperator.queryOrganizationById(projectDTO.getOrganizationId());
+        Tenant organization = baseServiceClientOperator.queryOrganizationById(projectDTO.getOrganizationId());
         List<AppServiceVersionAndCommitVO> appServiceVersionAndCommitVOS = new ArrayList<>();
 
         appServiceVersionDTOS.forEach(applicationVersionDTO -> {
@@ -401,7 +427,7 @@ public class AppServiceVersionServiceImpl implements AppServiceVersionService {
             appServiceVersionAndCommitVO.setVersion(applicationVersionDTO.getVersion());
             appServiceVersionAndCommitVO.setCreateDate(applicationVersionDTO.getCreationDate());
             appServiceVersionAndCommitVO.setCommitUrl(gitlabUrl + "/"
-                    + organization.getCode() + "-" + projectDTO.getCode() + "/"
+                    + organization.getTenantNum() + "-" + projectDTO.getCode() + "/"
                     + applicationDTO.getCode() + ".git");
             appServiceVersionAndCommitVOS.add(appServiceVersionAndCommitVO);
 
@@ -490,12 +516,9 @@ public class AppServiceVersionServiceImpl implements AppServiceVersionService {
     }
 
     @Override
-    public PageInfo<AppServiceVersionRespVO> pageShareVersionByAppId(Long appServiceId, PageRequest pageRequest, String params) {
+    public Page<AppServiceVersionRespVO> pageShareVersionByAppId(Long appServiceId, PageRequest pageable, String params) {
         Map<String, Object> paramMap = TypeUtil.castMapParams(params);
-        PageInfo<AppServiceVersionDTO> applicationDTOPageInfo = PageHelper.startPage(
-                pageRequest.getPage(),
-                pageRequest.getSize(),
-                PageRequestUtil.getOrderBy(pageRequest)).doSelectPageInfo(() -> appServiceVersionMapper.listShareVersionByAppId(appServiceId, TypeUtil.cast(paramMap.get(TypeUtil.PARAMS))));
+        Page<AppServiceVersionDTO> applicationDTOPageInfo = PageHelper.doPageAndSort(PageRequestUtil.simpleConvertSortForPage(pageable), () -> appServiceVersionMapper.listShareVersionByAppId(appServiceId, TypeUtil.cast(paramMap.get(TypeUtil.PARAMS))));
         return ConvertUtils.convertPage(applicationDTOPageInfo, AppServiceVersionRespVO.class);
     }
 
@@ -530,7 +553,7 @@ public class AppServiceVersionServiceImpl implements AppServiceVersionService {
 
     @Override
     public String baseQueryValue(Long versionId) {
-        return appServiceVersionMapper.queryValue(versionId);
+        return appServiceVersionMapper.queryValue(Objects.requireNonNull(versionId));
     }
 
     @Override
@@ -546,29 +569,28 @@ public class AppServiceVersionServiceImpl implements AppServiceVersionService {
     }
 
     @Override
-    public PageInfo<AppServiceVersionDTO> basePageByOptions(Long projectId, Long appServiceId, PageRequest pageRequest,
-                                                            String searchParam, Boolean isProjectOwner,
-                                                            Long userId) {
-        Sort sort = pageRequest.getSort();
-        String sortResult = "";
+    public Page<AppServiceVersionDTO> basePageByOptions(Long projectId, Long appServiceId, PageRequest pageable,
+                                                        String searchParam, Boolean isProjectOwner,
+                                                        Long userId) {
+        Sort sort = pageable.getSort();
         if (sort != null) {
-            sortResult = Lists.newArrayList(pageRequest.getSort().iterator()).stream()
-                    .map(t -> {
-                        String property = t.getProperty();
-                        if (property.equals("version")) {
-                            property = "dav.version";
-                        } else if (property.equals("creationDate")) {
-                            property = "dav.creation_date";
-                        }
-                        return property + " " + t.getDirection();
-                    })
-                    .collect(Collectors.joining(","));
+            List<Sort.Order> newOrders = new ArrayList<>();
+            sort.iterator().forEachRemaining(s -> {
+                String property = s.getProperty();
+                if (property.equals("version")) {
+                    property = "dav.version";
+                } else if (property.equals("creationDate")) {
+                    property = "dav.creation_date";
+                }
+                newOrders.add(new Sort.Order(s.getDirection(), property));
+            });
+            pageable.setSort(new Sort(newOrders));
         }
 
-        PageInfo<AppServiceVersionDTO> applicationVersionDTOPageInfo;
+        Page<AppServiceVersionDTO> applicationVersionDTOPageInfo;
         Map<String, Object> searchParamMap = TypeUtil.castMapParams(searchParam);
         applicationVersionDTOPageInfo = PageHelper
-                .startPage(pageRequest.getPage(), pageRequest.getSize(), sortResult).doSelectPageInfo(() -> appServiceVersionMapper.listApplicationVersion(projectId, appServiceId,
+                .doPageAndSort(pageable, () -> appServiceVersionMapper.listApplicationVersion(projectId, appServiceId,
                         TypeUtil.cast(searchParamMap.get(TypeUtil.SEARCH_PARAM)),
                         TypeUtil.cast(searchParamMap.get(TypeUtil.PARAMS)), isProjectOwner, userId));
         return applicationVersionDTOPageInfo;
@@ -630,12 +652,11 @@ public class AppServiceVersionServiceImpl implements AppServiceVersionService {
     public List<AppServiceVersionDTO> listAppServiceVersionByIdsAndProjectId(Set<Long> ids, Long projectId, String params) {
         List<AppServiceVersionDTO> appServiceVersionDTOS = new ArrayList<>();
         List<Long> appServiceIds = applicationService.listAppByProjectId(projectId, false, null, null)
-                .getList().stream().map(AppServiceVO::getId).collect(Collectors.toList());
+                .getContent().stream().map(AppServiceVO::getId).collect(Collectors.toList());
         Set<Long> localProjectIds = new HashSet<>();
         Set<Long> shareServiceIds = new HashSet<>();
         // 分别获取本项目的应用服务和共享服务
-        ids.stream().forEach(v -> {
-            boolean contains = appServiceIds.contains(v);
+        ids.forEach(v -> {
             if (appServiceIds.contains(v)) {
                 localProjectIds.add(v);
             } else {
@@ -667,46 +688,173 @@ public class AppServiceVersionServiceImpl implements AppServiceVersionService {
             appServiceVersionDTO.setHelmConfigId(configId);
         }
         List<AppServiceVersionDTO> list = appServiceVersionMapper.select(appServiceVersionDTO);
-        return list != null && list.size() > 0;
+        return !CollectionUtils.isEmpty(list);
     }
 
     @Override
     public void deleteByAppServiceId(Long appServiceId) {
         List<AppServiceVersionDTO> appServiceVersionDTOS = appServiceVersionMapper.listByAppServiceId(appServiceId, null);
-        if(!CollectionUtils.isEmpty(appServiceVersionDTOS)){
+        if (!CollectionUtils.isEmpty(appServiceVersionDTOS)) {
             Set<Long> valueIds = new HashSet<>();
             Set<Long> readmeIds = new HashSet<>();
             Set<Long> configIds = new HashSet<>();
             Set<Long> versionIds = new HashSet<>();
-            appServiceVersionDTOS.stream().forEach(appServiceVersionDTO -> {
+            appServiceVersionDTOS.forEach(appServiceVersionDTO -> {
                 versionIds.add(appServiceVersionDTO.getId());
-                if(appServiceVersionDTO.getValueId() != null){
+                if (appServiceVersionDTO.getValueId() != null) {
                     valueIds.add(appServiceVersionDTO.getValueId());
                 }
-                if(appServiceVersionDTO.getReadmeValueId() != null){
+                if (appServiceVersionDTO.getReadmeValueId() != null) {
                     readmeIds.add(appServiceVersionDTO.getReadmeValueId());
                 }
 
-                if(appServiceVersionDTO.getHarborConfigId() != null){
+                if (appServiceVersionDTO.getHarborConfigId() != null) {
                     configIds.add(appServiceVersionDTO.getHarborConfigId());
                 }
-                if(appServiceVersionDTO.getHelmConfigId() != null){
+                if (appServiceVersionDTO.getHelmConfigId() != null) {
                     configIds.add(appServiceVersionDTO.getHelmConfigId());
                 }
 
             });
-            if(!CollectionUtils.isEmpty(valueIds)){
+            if (!CollectionUtils.isEmpty(valueIds)) {
                 appServiceVersionValueService.deleteByIds(valueIds);
             }
-            if(!CollectionUtils.isEmpty(readmeIds)){
+            if (!CollectionUtils.isEmpty(readmeIds)) {
                 appServiceVersionReadmeMapper.deleteByIds(readmeIds);
             }
-            if(!CollectionUtils.isEmpty(configIds)){
+            if (!CollectionUtils.isEmpty(configIds)) {
                 devopsConfigService.deleteByConfigIds(configIds);
             }
             appServiceVersionMapper.deleteByIds(versionIds);
         }
     }
 
+    private Long queryDefaultHarborId() {
+        DevopsConfigDTO devopsConfigDTO = new DevopsConfigDTO();
+        devopsConfigDTO.setName(MiscConstants.DEFAULT_HARBOR_NAME);
+        return devopsConfigMapper.selectOne(devopsConfigDTO).getId();
+    }
 
+    @Override
+    public void fixHarbor() {
+        //修复appVsersion表，register_secret表
+        LOGGER.info("start fix appVsersion table");
+        //根据appServiceID 进行分组
+
+        Long defaultHarborConfigId = queryDefaultHarborId();
+
+        LOGGER.info("Default harbor config id is {}", defaultHarborConfigId);
+
+        List<Long> longList = appServiceVersionMapper.selectAllAppServiceIdWithNullHarborConfig();
+        LOGGER.info("Start to fix null harbor config id versions. the app-service id size is {}", longList.size());
+        for (Long appServiceId : longList) {
+            handlerVersion(appServiceId);
+        }
+        LOGGER.info("End to fix null harbor config id versions");
+
+        // 修harbor config id 非null的
+        LOGGER.info("Start to fix default harbor config id versions");
+        appServiceVersionMapper.updateDefaultHarborRecords(defaultHarborConfigId);
+        LOGGER.info("Finish to fix default harbor config id versions");
+
+        LOGGER.info("Start to fix non default harbor config id versions");
+        appServiceVersionMapper.updateCustomHarborRecords(defaultHarborConfigId);
+        LOGGER.info("Finish to fix non default harbor config id versions");
+
+        LOGGER.info("end fix appVsersion table");
+        LOGGER.info("start fix register_secret");
+        int count = devopsRegistrySecretMapper.selectCount(null);
+        int pageSize = 100;
+        int total = (count + pageSize - 1) / pageSize;
+        int pageNumber = 0;
+        do {
+            PageRequest pageable = new PageRequest();
+            pageable.setPage(pageNumber);
+            pageable.setSize(pageSize);
+            pageable.setSort(new Sort("id"));
+            Page<DevopsRegistrySecretDTO> doPageAndSort = PageHelper.doPageAndSort(PageRequestUtil.simpleConvertSortForPage(pageable),
+                    () -> devopsRegistrySecretMapper.selectAll());
+            if (!CollectionUtils.isEmpty(doPageAndSort.getContent())) {
+                for (DevopsRegistrySecretDTO devopsRegistrySecretDTO : doPageAndSort) {
+                    DevopsConfigDTO devopsConfigDTO = devopsConfigMapper.selectByPrimaryKey(devopsRegistrySecretDTO.getConfigId());
+                    if (!Objects.isNull(devopsConfigDTO) && HARBOR_DEFAULT.equals(devopsConfigDTO.getName())) {
+                        devopsRegistrySecretDTO.setConfigId(null);
+                        devopsRegistrySecretDTO.setRepoType(DEFAULT_REPO);
+                        devopsRegistrySecretMapper.updateByPrimaryKey(devopsRegistrySecretDTO);
+                    } else {
+                        devopsRegistrySecretDTO.setRepoType(CUSTOM_REPO);
+                        devopsRegistrySecretMapper.updateByPrimaryKey(devopsRegistrySecretDTO);
+                    }
+                }
+            }
+            pageNumber++;
+        } while (pageNumber <= total);
+
+        LOGGER.info("end fix register_secret");
+    }
+
+    @Override
+    public AppServiceVersionDTO queryByCommitShaAndRef(String commitSha, String gitlabTriggerRef) {
+        AppServiceVersionDTO appServiceVersionDTO = new AppServiceVersionDTO();
+        appServiceVersionDTO.setCommit(commitSha);
+        appServiceVersionDTO.setRef(gitlabTriggerRef);
+        return appServiceVersionMapper.selectOne(appServiceVersionDTO);
+    }
+
+    @Nullable
+    private DevopsConfigDTO queryConfigByAppServiceId(Long appServiceId) {
+        DevopsConfigDTO configDTO = new DevopsConfigDTO();
+        configDTO.setAppServiceId(appServiceId);
+        return devopsConfigMapper.selectOne(configDTO);
+    }
+
+    @Nullable
+    private DevopsConfigDTO queryConfigByProjectId(Long projectId) {
+        DevopsConfigDTO configDTO = new DevopsConfigDTO();
+        configDTO.setProjectId(projectId);
+        return devopsConfigMapper.selectOne(configDTO);
+    }
+
+    @Nullable
+    private DevopsConfigDTO queryConfigByOrgId(Long orgId) {
+        DevopsConfigDTO configDTO = new DevopsConfigDTO();
+        configDTO.setOrganizationId(orgId);
+        return devopsConfigMapper.selectOne(configDTO);
+    }
+
+    private void handlerVersion(Long appServiceId) {
+        LOGGER.info("fix app service id is {} data", appServiceId);
+        DevopsConfigDTO devopsConfigDTO = queryConfigByAppServiceId(appServiceId);
+        if (!Objects.isNull(devopsConfigDTO)) {
+            //自定义仓库 ，配置和appService一样
+            LOGGER.info("Custom config {} found for app-service with id {} in app service", devopsConfigDTO.getId(), appServiceId);
+            appServiceVersionMapper.updateNullHarborVersionToCustomType(appServiceId, devopsConfigDTO.getId());
+        } else {
+            // 找项目的
+            AppServiceDTO appServiceDTO = appServiceMapper.selectByPrimaryKey(appServiceId);
+            if (!Objects.isNull(appServiceDTO)) {
+                devopsConfigDTO = queryConfigByProjectId(appServiceDTO.getProjectId());
+                if (!Objects.isNull(devopsConfigDTO)) {
+                    //自定义仓库 ，配置和project一样
+                    LOGGER.info("Custom config {} found for app-service with id {} in project with id {}", devopsConfigDTO.getId(), appServiceId, appServiceDTO.getProjectId());
+                    appServiceVersionMapper.updateNullHarborVersionToCustomType(appServiceId, devopsConfigDTO.getId());
+                } else {
+                    ProjectDTO projectDTO = baseServiceClientOperator.queryIamProjectById(appServiceDTO.getProjectId());
+                    if (!Objects.isNull(projectDTO)) {
+                        devopsConfigDTO = queryConfigByOrgId(projectDTO.getOrganizationId());
+                        if (!Objects.isNull(devopsConfigDTO)) {
+                            //自定义仓库 ，配置和Org一样
+                            LOGGER.info("Custom config {} found for app-service with id {} in organization with id {}", devopsConfigDTO.getId(), appServiceId, projectDTO.getOrganizationId());
+                            appServiceVersionMapper.updateNullHarborVersionToCustomType(appServiceId, devopsConfigDTO.getId());
+                        } else {
+                            //默认仓库
+                            LOGGER.info("No custom config Found for app-service with id {}, set to default", appServiceId);
+                            appServiceVersionMapper.updateNullHarborVersionToDefaultType(appServiceId);
+                        }
+                    }
+                }
+            }
+
+        }
+    }
 }

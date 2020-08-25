@@ -1,14 +1,11 @@
 package io.choerodon.devops.app.service;
 
 import java.util.List;
-import java.util.Map;
 
-import com.github.pagehelper.PageInfo;
-
-import io.choerodon.base.domain.PageRequest;
-import io.choerodon.core.notify.NoticeSendDTO;
+import io.choerodon.core.domain.Page;
 import io.choerodon.devops.api.vo.*;
 import io.choerodon.devops.infra.dto.PipelineDTO;
+import io.choerodon.mybatis.pagehelper.domain.PageRequest;
 
 /**
  * Creator: ChangpingShi0213@gmail.com
@@ -16,7 +13,7 @@ import io.choerodon.devops.infra.dto.PipelineDTO;
  * Description:
  */
 public interface PipelineService {
-    PageInfo<PipelineVO> pageByOptions(Long projectId, PipelineSearchVO pipelineSearchVO, PageRequest pageRequest);
+    Page<PipelineVO> pageByOptions(Long projectId, PipelineSearchVO pipelineSearchVO, PageRequest pageable);
 
     PipelineReqVO create(Long projectId, PipelineReqVO pipelineReqVO);
 
@@ -52,6 +49,8 @@ public interface PipelineService {
 
     void checkName(Long projectId, String name);
 
+    boolean isNameUnique(Long projectId, String name);
+
     List<PipelineVO> listPipelineDTO(Long projectId);
 
     void updateStatus(Long pipelineRecordId, Long stageRecordId, String status, String errorInfo);
@@ -61,8 +60,6 @@ public interface PipelineService {
     void executeAutoDeploy(Long pipelineId);
 
     void failed(Long projectId, Long recordId);
-
-    void sendSiteMessage(Long pipelineRecordId, String type, List<NoticeSendDTO.User> users, Map<String, Object> params);
 
     PipelineDTO baseCreate(Long projectId, PipelineDTO devopsPipelineDTO);
 
@@ -79,4 +76,6 @@ public interface PipelineService {
     List<PipelineDTO> baseQueryByProjectId(Long projectId);
 
     void setPipelineRecordDetail(Boolean projectOwner, DevopsDeployRecordVO devopsDeployRecordVO);
+
+    PipelineDTO checkExistAndGet(Long pipelineId);
 }

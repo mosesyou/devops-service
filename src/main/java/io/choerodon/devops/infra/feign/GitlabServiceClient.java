@@ -1,18 +1,20 @@
 package io.choerodon.devops.infra.feign;
 
-import java.util.List;
-import java.util.Map;
-import javax.validation.Valid;
-
-import io.choerodon.devops.infra.dto.gitlab.CommitDTO;
+import io.choerodon.devops.api.vo.CiVariableVO;
+import io.choerodon.devops.api.vo.FileCreationVO;
 import io.choerodon.devops.infra.dto.RepositoryFileDTO;
 import io.choerodon.devops.infra.dto.gitlab.*;
+import io.choerodon.devops.infra.dto.gitlab.ci.Pipeline;
 import io.choerodon.devops.infra.feign.fallback.GitlabServiceClientFallback;
+import io.swagger.annotations.ApiOperation;
+import io.swagger.annotations.ApiParam;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-
+import javax.validation.Valid;
+import java.util.List;
+import java.util.Map;
 
 /**
  * gitlab服务 feign客户端
@@ -27,6 +29,9 @@ public interface GitlabServiceClient {
     @GetMapping(value = "/v1/users/{username}/details")
     ResponseEntity<GitLabUserDTO> queryUserByUserName(
             @PathVariable("username") String username);
+
+    @GetMapping(value = "/v1/users/currentUser")
+    ResponseEntity<GitLabUserDTO> queryAdminUser();
 
     @GetMapping(value = "/v1/groups/{groupId}/members/{userId}")
     ResponseEntity<MemberDTO> queryGroupMember(
@@ -49,14 +54,24 @@ public interface GitlabServiceClient {
             @RequestBody @Valid MemberDTO member);
 
     @PostMapping(value = "/v1/users")
-    ResponseEntity<GitLabUserDTO> createUser(@RequestParam("password") String password,
-                                             @RequestParam(value = "projectsLimit", required = false) Integer projectsLimit,
-                                             @RequestBody GitlabUserReqDTO userReqDTO);
+    ResponseEntity<GitLabUserDTO> createUser(@RequestParam(value = "projectsLimit", required = false) Integer projectsLimit,
+                                             @RequestBody GitlabTransferDTO gitlabTransferDTO);
 
     @PutMapping("/v1/users/{userId}")
     ResponseEntity<GitLabUserDTO> updateGitLabUser(@PathVariable("userId") Integer userId,
                                                    @RequestParam(value = "projectsLimit", required = false) Integer projectsLimit,
                                                    @RequestBody GitlabUserReqDTO userReqDTO);
+
+    /**
+     * 根据用户Id更新用户密码
+     *
+     * @param userId 用户Id
+     * @param user   用户密码信息F
+     */
+    @PutMapping(value = "/v1/users/{userId}/password")
+    ResponseEntity<GitLabUserDTO> updateUserPasswordByUserId(
+            @PathVariable("userId") Integer userId,
+            @RequestBody GitlabUserWithPasswordDTO user);
 
 
     @PutMapping("/v1/projects/{projectId}")
@@ -71,27 +86,13 @@ public interface GitlabServiceClient {
 
     @PostMapping("/v1/projects/deploy_key")
     ResponseEntity createDeploykey(@RequestParam("projectId") Integer projectId,
-                                   @RequestParam("title") String title,
-                                   @RequestParam("key") String key,
+                                   @RequestBody GitlabTransferDTO gitlabTransferDTO,
                                    @RequestParam("canPush") boolean canPush,
                                    @RequestParam("userId") Integer userId);
 
     @GetMapping("/v1/projects/deploy_key")
     ResponseEntity<List<DeployKeyDTO>> listDeploykey(@RequestParam("projectId") Integer projectId,
                                                      @RequestParam("userId") Integer userId);
-
-
-    @PostMapping(value = "/v1/projects/{projectId}/variables")
-    ResponseEntity<Map<String, Object>> addProjectVariable(@PathVariable("projectId") Integer projectId,
-                                                           @RequestParam("key") String key,
-                                                           @RequestParam("value") String value,
-                                                           @RequestParam("protecteds") Boolean protecteds,
-                                                           @RequestParam("userId") Integer userId);
-
-    @PutMapping(value = "/v1/projects/{projectId}/variables")
-    ResponseEntity<List<Map<String, Object>>> batchAddProjectVariable(@PathVariable("projectId") Integer projectId,
-                                                                      @RequestParam("userId") Integer userId,
-                                                                      @RequestBody @Valid List<VariableDTO> variableDTODTOS);
 
     @DeleteMapping(value = "/v1/projects/{projectId}")
     ResponseEntity deleteProjectById(@PathVariable("projectId") Integer projectId,
@@ -109,12 +110,6 @@ public interface GitlabServiceClient {
     ResponseEntity<GitlabProjectDTO> queryProjectByName(@RequestParam("userId") Integer userId,
                                                         @RequestParam("groupName") String groupName,
                                                         @RequestParam("projectName") String projectName);
-
-
-    @GetMapping(value = "/v1/projects/{projectId}/variable")
-    ResponseEntity<List<VariableDTO>> listVariable(@PathVariable("projectId") Integer projectId,
-                                                   @RequestParam("userId") Integer userId);
-
 
     @PostMapping(value = "/v1/users/{userId}/impersonation_tokens")
     ResponseEntity<ImpersonationTokenDTO> create(@PathVariable("userId") Integer userId);
@@ -137,8 +132,9 @@ public interface GitlabServiceClient {
 
     /**
      * 根据组的path查询组
+     *
      * @param groupName 组的path
-     * @param userId 用户id
+     * @param userId    用户id
      * @return 组
      */
     @GetMapping(value = "/v1/groups/{groupName}")
@@ -147,47 +143,28 @@ public interface GitlabServiceClient {
 
     @PostMapping(value = "/v1/projects/{projectId}/repository/file")
     ResponseEntity<RepositoryFileDTO> createFile(@PathVariable("projectId") Integer projectId,
-                                                 @RequestParam("path") String path,
-                                                 @RequestParam("content") String content,
-                                                 @RequestParam("commitMessage") String commitMessage,
-                                                 @RequestParam("userId") Integer userId);
-
-    @PostMapping(value = "/v1/projects/{projectId}/repository/file")
-    ResponseEntity<RepositoryFileDTO> createFile(@PathVariable("projectId") Integer projectId,
-                                              @RequestParam("path") String path,
-                                              @RequestParam("content") String content,
-                                              @RequestParam("commitMessage") String commitMessage,
-                                              @RequestParam("userId") Integer userId,
-                                              @RequestParam("branch_name") String branchName);
+                                                 @RequestBody FileCreationVO fileCreationVO);
 
     @PutMapping(value = "/v1/projects/{projectId}/repository/file")
     ResponseEntity<RepositoryFileDTO> updateFile(@PathVariable("projectId") Integer projectId,
-                                              @RequestParam("path") String path,
-                                              @RequestParam("content") String content,
-                                              @RequestParam("commitMessage") String commitMessage,
-                                              @RequestParam("userId") Integer userId);
+                                                 @RequestBody FileCreationVO fileCreationVO);
 
     @DeleteMapping(value = "/v1/projects/{projectId}/repository/file")
     ResponseEntity deleteFile(@PathVariable("projectId") Integer projectId,
-                              @RequestParam("path") String path,
-                              @RequestParam("commitMessage") String commitMessage,
-                              @RequestParam("userId") Integer userId);
+                              @RequestBody FileCreationVO fileCreationVO);
 
     @GetMapping(value = "/v1/projects/{projectId}/repository/{commit}/file")
     ResponseEntity<RepositoryFileDTO> getFile(@PathVariable("projectId") Integer projectId,
-                                           @PathVariable("commit") String commit,
-                                           @RequestParam(value = "file_path") String filePath);
+                                              @PathVariable("commit") String commit,
+                                              @RequestParam(value = "file_path") String filePath);
 
-    @GetMapping(value = "/v1/projects/{projectId}/repository/file/diffs")
+    @PostMapping(value = "/v1/projects/{projectId}/repository/file/diffs")
     ResponseEntity<CompareResultDTO> queryCompareResult(@PathVariable("projectId") Integer projectId,
-                                                        @RequestParam("from") String from,
-                                                        @RequestParam("to") String to);
+                                                        @RequestBody GitlabTransferDTO gitlabTransferDTO);
 
     @PostMapping(value = "/v1/projects/{projectId}/protected_branches")
     ResponseEntity<Map<String, Object>> createProtectedBranch(@PathVariable("projectId") Integer projectId,
-                                                              @RequestParam("name") String name,
-                                                              @RequestParam("mergeAccessLevel") String mergeAccessLevel,
-                                                              @RequestParam("pushAccessLevel") String pushAccessLevel,
+                                                              @RequestBody GitlabTransferDTO gitlabTransferDTO,
                                                               @RequestParam("userId") Integer userId);
 
     @GetMapping(value = "/v1/projects/{projectId}/pipelines")
@@ -221,10 +198,9 @@ public interface GitlabServiceClient {
                                                            @RequestParam("sha") String sha,
                                                            @RequestParam("userId") Integer userId);
 
-    @GetMapping(value = "/v1/projects/{projectId}/repository/commits/branch")
+    @PostMapping(value = "/v1/projects/{projectId}/repository/commits/branch")
     ResponseEntity<List<CommitDTO>> getCommits(@PathVariable("projectId") Integer projectId,
-                                               @RequestParam("branchName") String branchName,
-                                               @RequestParam("since") String since);
+                                               @RequestBody GitlabTransferDTO gitlabTransferDTO);
 
     @GetMapping(value = "/v1/projects/{projectId}/pipelines/{pipelineId}/jobs")
     ResponseEntity<List<JobDTO>> listJobs(@PathVariable("projectId") Integer projectId,
@@ -257,13 +233,13 @@ public interface GitlabServiceClient {
                                                @RequestParam(value = "userId") Integer userId);
 
     @GetMapping(value = "/v1/projects/{projectId}/pipelines/{pipelineId}/retry")
-    ResponseEntity<GitlabPipelineDTO> retryPipeline(
+    ResponseEntity<Pipeline> retryPipeline(
             @PathVariable("projectId") Integer projectId,
             @PathVariable("pipelineId") Integer pipelineId,
             @RequestParam("userId") Integer userId);
 
     @GetMapping(value = "/v1/projects/{projectId}/pipelines/{pipelineId}/cancel")
-    ResponseEntity<GitlabPipelineDTO> cancelPipeline(
+    ResponseEntity<Pipeline> cancelPipeline(
             @PathVariable("projectId") Integer projectId,
             @PathVariable("pipelineId") Integer pipelineId,
             @RequestParam("userId") Integer userId);
@@ -272,20 +248,13 @@ public interface GitlabServiceClient {
     /**
      * 创建merge请求
      *
-     * @param projectId    工程ID
-     * @param sourceBranch 源分支
-     * @param targetBranch 目标分支
-     * @param title        标题
-     * @param description  描述
+     * @param projectId 工程ID
      * @return 创建的merge请求
      */
     @PostMapping("/v1/projects/{projectId}/merge_requests")
     ResponseEntity<MergeRequestDTO> createMergeRequest(
             @PathVariable("projectId") Integer projectId,
-            @RequestParam("sourceBranch") String sourceBranch,
-            @RequestParam("targetBranch") String targetBranch,
-            @RequestParam("title") String title,
-            @RequestParam("description") String description,
+            @RequestBody GitlabTransferDTO gitlabTransferDTO,
             @RequestParam(value = "userId", required = false) Integer userId);
 
     /**
@@ -301,7 +270,7 @@ public interface GitlabServiceClient {
     ResponseEntity<MergeRequestDTO> acceptMergeRequest(
             @PathVariable("projectId") Integer projectId,
             @PathVariable("mergeRequestId") Integer mergeRequestId,
-            @RequestParam("mergeCommitMessage") String mergeCommitMessage,
+            @RequestBody String mergeCommitMessage,
             @RequestParam("removeSourceBranch") Boolean shouldRemoveSourceBranch,
             @RequestParam("mergeWhenPipelineSucceeds") Boolean mergeWhenPipelineSucceeds,
             @RequestParam(value = "userId", required = false) Integer userId);
@@ -321,32 +290,24 @@ public interface GitlabServiceClient {
      * 创建tag
      *
      * @param projectId 工程ID
-     * @param name      tag名称
-     * @param ref       创建tag的源
      * @return 创建的tag
      */
     @PostMapping("/v1/projects/{projectId}/repository/tags")
     ResponseEntity<TagDTO> createTag(
             @PathVariable("projectId") Integer projectId,
-            @RequestParam("name") String name,
-            @RequestParam("ref") String ref,
-            @RequestParam(value = "message", required = false, defaultValue = "") String message,
-            @RequestBody(required = false) String releaseNotes,
+            @RequestBody GitlabTransferDTO gitlabTransferDTO,
             @RequestParam("userId") Integer userId);
 
     /**
      * 更新 tag
      *
-     * @param projectId    项目id
-     * @param name         标签名
-     * @param releaseNotes 发布日志
+     * @param projectId 项目id
      * @return Tag
      */
     @PutMapping("/v1/projects/{projectId}/repository/tags")
     ResponseEntity<TagDTO> updateTag(
             @PathVariable("projectId") Integer projectId,
-            @RequestParam("name") String name,
-            @RequestBody(required = false) String releaseNotes,
+            @RequestBody GitlabTransferDTO gitlabTransferDTO,
             @RequestParam("userId") Integer userId);
 
     /**
@@ -358,7 +319,7 @@ public interface GitlabServiceClient {
     @DeleteMapping("/v1/projects/{projectId}/repository/tags")
     ResponseEntity deleteTag(
             @PathVariable("projectId") Integer projectId,
-            @RequestParam("name") String name,
+            @RequestBody String name,
             @RequestParam("userId") Integer userId);
 
     @DeleteMapping("/v1/projects/{projectId}/merge_requests/{mergeRequestId}")
@@ -375,7 +336,7 @@ public interface GitlabServiceClient {
     @DeleteMapping("/v1/projects/{projectId}/repository/branches")
     ResponseEntity<Object> deleteBranch(
             @PathVariable("projectId") Integer projectId,
-            @RequestParam("branchName") String branchName,
+            @RequestBody String branchName,
             @RequestParam("userId") Integer userId);
 
 
@@ -391,20 +352,18 @@ public interface GitlabServiceClient {
             @PathVariable("projectId") Integer projectId,
             @PathVariable("branchName") String branchName);
 
+    //todo 如果name里面有&字符，&后面的部分会被丢弃
 
     /**
      * 创建新分支的接口
      *
      * @param projectId 工程ID
-     * @param name      创建的分支名
-     * @param source    源分支名
      * @return 创建的分支
      */
     @PostMapping("/v1/projects/{projectId}/repository/branches")
     ResponseEntity<BranchDTO> createBranch(
             @PathVariable("projectId") Integer projectId,
-            @RequestParam("name") String name,
-            @RequestParam("source") String source,
+            @RequestBody GitlabTransferDTO gitlabTransferDTO,
             @RequestParam("userId") Integer userId);
 
     /**
@@ -476,4 +435,221 @@ public interface GitlabServiceClient {
 
     @GetMapping("/v1/confings/get_admin_token")
     ResponseEntity<String> getAdminToken();
+
+    /**
+     * 判断用户是否是admin
+     *
+     * @param userId gitlab用户id
+     * @return true表示是
+     */
+    @GetMapping("/v1/users/{userId}/admin")
+    ResponseEntity<Boolean> checkIsAdmin(@PathVariable("userId") Integer userId);
+
+    /**
+     * 为用户添加admin权限
+     *
+     * @param userId gitlab用户id
+     * @return true表示加上了
+     */
+    @PutMapping("/v1/users/{userId}/admin")
+    ResponseEntity<Boolean> assignAdmin(@PathVariable("userId") Integer userId);
+
+    /**
+     * 删除用户admin权限
+     *
+     * @param userId gitlab用户id
+     * @return true表示删除了
+     */
+    @DeleteMapping("/v1/users/{userId}/admin")
+    ResponseEntity<Boolean> deleteAdmin(@PathVariable("userId") Integer userId);
+
+
+    @ApiOperation(value = "查出组下所有的AccessRequest")
+    @GetMapping(value = "/v1/groups/{groupId}/access_requests")
+    ResponseEntity<List<AccessRequestDTO>> listAccessRequestsOfGroup(
+            @ApiParam("组id")
+            @PathVariable("groupId") Integer groupId);
+
+    /**
+     * 这个接口不抛出关于GitlabApi的异常
+     *
+     * @param groupId 组id
+     * @param userId  被拒绝的用户的id
+     * @return OK
+     */
+    @ApiOperation(value = "拒绝组下某个人的AccessRequest请求")
+    @DeleteMapping(value = "/v1/groups/{groupId}/access_requests")
+    ResponseEntity denyAccessRequest(
+            @ApiParam(value = "组id")
+            @PathVariable("groupId") Integer groupId,
+            @ApiParam(value = "被拒绝的用户id")
+            @RequestParam("user_id") Integer userId);
+
+    @PostMapping(value = "/v1/projects/{projectId}/repository/commits")
+    @ApiOperation("创建commit，可以批量操作文件")
+    ResponseEntity createCommit(
+            @ApiParam(value = "项目id", required = true)
+            @PathVariable(value = "projectId") Integer projectId,
+            @ApiParam(value = "用户名", required = true)
+            @RequestParam(value = "user_id") Integer userId,
+            @ApiParam(value = "操作文件相关的信息")
+            @RequestBody CommitPayloadDTO commitPayloadDTO);
+
+    /**
+     * Create a new pipeline
+     *
+     * @param projectId 项目id
+     * @param ref       分支
+     * @return Pipeline
+     */
+    @ApiOperation(value = "Create a pipelines jobs ")
+    @PostMapping("/v1/projects/{projectId}/pipelines")
+    ResponseEntity<Pipeline> createPipeline(
+            @ApiParam(value = "项目id", required = true)
+            @PathVariable(value = "projectId") Integer projectId,
+            @ApiParam(value = "userId")
+            @RequestParam(value = "userId") Integer userId,
+            @ApiParam(value = "分支")
+            @RequestParam(value = "ref") String ref);
+
+    /**
+     * 查询job执行日志
+     */
+    @GetMapping(value = "/v1/projects/{projectId}/jobs/{jobId}/trace")
+    ResponseEntity<String> queryTrace(
+            @PathVariable(value = "projectId") Integer projectId,
+            @PathVariable(value = "jobId") Integer jobId,
+            @RequestParam(value = "userId") Integer userId);
+
+    @ApiOperation(value = "重试job")
+    @PutMapping(value = "/v1/projects/{projectId}/jobs/{jobId}/retry")
+    ResponseEntity<JobDTO> retryJob(
+            @PathVariable(value = "projectId") Integer projectId,
+            @PathVariable(value = "jobId") Integer jobId,
+            @RequestParam(value = "userId") Integer userId);
+
+    @GetMapping(value = "/v1/projects/{projectId}/repository/branches/{branchName}")
+    ResponseEntity<BranchDTO> queryBranchByName(
+            @ApiParam(value = "工程id", required = true)
+            @PathVariable("projectId") Integer projectId,
+            @ApiParam(value = "要查询的分支名", required = true)
+            @PathVariable("branchName") String branchName);
+
+    /**
+     * 列举出gitlab项目组的ci variable
+     *
+     * @param groupId 组id
+     * @param userId  gitlab用户id
+     * @return
+     */
+    @GetMapping(value = "/v1/groups/{groupId}/variable")
+    ResponseEntity<List<CiVariableVO>> listProjectVariable(@PathVariable("groupId") Integer groupId,
+                                                           @RequestParam("userId") Integer userId);
+
+    @ApiOperation(value = "添加组ci环境变量")
+    @PostMapping(value = "/v1/groups/{groupId}/variable")
+    ResponseEntity<CiVariableVO> createGroupVariable(
+            @ApiParam(value = "组ID", required = true)
+            @PathVariable("groupId") Integer groupId,
+            @ApiParam(value = "变量key&value", required = true)
+            @RequestBody GitlabTransferDTO gitlabTransferDTO,
+            @ApiParam(value = "变量是否保护", required = true)
+            @RequestParam("protecteds") boolean protecteds,
+            @ApiParam(value = "用户Id称")
+            @RequestParam(required = false, name = "userId") Integer userId);
+
+    /**
+     * 批量增加/更新组ci环境变量
+     *
+     * @param groupId 组id
+     * @param userId  用户id
+     * @param list    变量列表
+     * @return 变量列表
+     */
+    @ApiOperation(value = " 批量增加/更新项目ci环境变量")
+    @PutMapping(value = "/v1/groups/{groupId}/variables")
+    ResponseEntity<List<CiVariableVO>> batchSaveGroupVariable(
+            @ApiParam(value = "组ID", required = true)
+            @PathVariable("groupId") Integer groupId,
+            @ApiParam(value = "用户ID", required = true)
+            @RequestParam(value = "userId") Integer userId,
+            @ApiParam(value = "variable信息", required = true)
+            @RequestBody List<CiVariableVO> list);
+
+    /**
+     * 删除组中指定key的变量
+     *
+     * @param groupId 组id
+     * @param userId  用户id
+     * @param key     key
+     * @return 204 code
+     */
+    @ApiOperation(value = "删除ci环境变量")
+    @DeleteMapping(value = "/v1/groups/{groupId}/variables")
+    ResponseEntity<Void> deleteVariable(
+            @ApiParam(value = "组ID", required = true)
+            @PathVariable("groupId") Integer groupId,
+            @ApiParam(value = "用户ID", required = true)
+            @RequestParam(value = "userId") Integer userId,
+            @ApiParam(value = "variable key", required = true)
+            @RequestParam(value = "key") String key);
+
+    /**
+     * 批量删除组中指定key的变量
+     *
+     * @param groupId 组id
+     * @param userId  用户id
+     * @param key     key
+     * @return 204 code
+     */
+    @ApiOperation(value = "批量删除组中指定key的变量")
+    @DeleteMapping(value = "/v1/groups/{groupId}/variables")
+    ResponseEntity<Void> batchGroupDeleteVariable(
+            @ApiParam(value = "组ID", required = true)
+            @PathVariable("groupId") Integer groupId,
+            @ApiParam(value = "用户ID", required = true)
+            @RequestParam(value = "userId") Integer userId,
+            @ApiParam(value = "variable keys", required = true)
+            @RequestBody List<String> key);
+
+    /**
+     * 列举出gitlab项目的ci variable
+     *
+     * @param projectId gitlab项目id
+     * @param userId    gitlab用户id
+     * @return
+     */
+    @GetMapping(value = "/v1/projects/{projectId}/variable")
+    ResponseEntity<List<CiVariableVO>> listAppServiceVariable(@PathVariable("projectId") Integer projectId,
+                                                              @RequestParam("userId") Integer userId);
+
+
+    @PostMapping(value = "/v1/projects/{projectId}/variables")
+    ResponseEntity<CiVariableVO> addProjectVariable(@PathVariable("projectId") Integer projectId,
+                                                    @RequestBody GitlabTransferDTO gitlabTransferDTO,
+                                                    @RequestParam("protecteds") Boolean protecteds,
+                                                    @RequestParam("userId") Integer userId);
+
+    @PutMapping(value = "/v1/projects/{projectId}/variables")
+    ResponseEntity<List<CiVariableVO>> batchSaveProjectVariable(@PathVariable("projectId") Integer projectId,
+                                                                @RequestParam("userId") Integer userId,
+                                                                @RequestBody List<CiVariableVO> ciVariableVOList);
+
+    /**
+     * 批量删除项目中指定key的变量
+     *
+     * @param projectId 项目id
+     * @param userId    用户id
+     * @param key       key
+     * @return 204 code
+     */
+    @ApiOperation(value = "批量删除项目中指定key的变量")
+    @DeleteMapping(value = "/v1/projects/{projectId}/variables")
+    ResponseEntity<Void> batchProjectDeleteVariable(
+            @ApiParam(value = "项目id", required = true)
+            @PathVariable(value = "projectId") Integer projectId,
+            @ApiParam(value = "用户ID", required = true)
+            @RequestParam(value = "userId") Integer userId,
+            @ApiParam(value = "variable keys", required = true)
+            @RequestBody List<String> key);
 }

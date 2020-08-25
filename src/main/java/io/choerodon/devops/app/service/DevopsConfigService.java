@@ -3,37 +3,27 @@ package io.choerodon.devops.app.service;
 import java.util.List;
 import java.util.Set;
 
-import com.github.pagehelper.PageInfo;
-
-import io.choerodon.base.domain.PageRequest;
+import io.choerodon.core.domain.Page;
 import io.choerodon.devops.api.vo.DefaultConfigVO;
 import io.choerodon.devops.api.vo.DevopsConfigRepVO;
 import io.choerodon.devops.api.vo.DevopsConfigVO;
 import io.choerodon.devops.infra.dto.DevopsConfigDTO;
+import io.choerodon.devops.infra.dto.harbor.ProjectDetail;
+import io.choerodon.mybatis.pagehelper.domain.PageRequest;
 
 /**
  * @author zongw.lee@gmail.com
  * @since 2019/03/11
  */
 public interface DevopsConfigService {
-
     /**
      * 项目下处理
-     *
-     * @param resourceId
-     * @param resourceType
-     * @param devopsConfigVO
-     * @return
      */
     void operate(Long resourceId, String resourceType, List<DevopsConfigVO> devopsConfigVO);
 
 
     /**
      * 项目下根据类型查询配置
-     *
-     * @param resourceId
-     * @param resourceType
-     * @return
      */
     List<DevopsConfigVO> queryByResourceId(Long resourceId, String resourceType);
 
@@ -64,7 +54,7 @@ public interface DevopsConfigService {
 
     DevopsConfigDTO baseCheckByName(String name);
 
-    PageInfo<DevopsConfigDTO> basePageByOptions(Long projectId, PageRequest pageRequest, String params);
+    Page<DevopsConfigDTO> basePageByOptions(Long projectId, PageRequest pageable, String params);
 
     void baseDelete(Long id);
 

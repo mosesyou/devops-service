@@ -1,8 +1,7 @@
 package io.choerodon.devops.api.vo;
 
-import java.util.Objects;
-
 import io.swagger.annotations.ApiModelProperty;
+import org.hzero.starter.keyencrypt.core.Encrypt;
 
 /**
  * Creator: Runge
@@ -14,26 +13,17 @@ public class DevopsIngressPathVO {
     @ApiModelProperty("Ingress的path值")
     private String path;
     @ApiModelProperty("path对应的网络id")
+    @Encrypt
     private Long serviceId;
     @ApiModelProperty("网络名称")
     private String serviceName;
     @ApiModelProperty("网络状态")
     private String serviceStatus;
+    @ApiModelProperty("网络的错误信息")
+    private String serviceError;
     @ApiModelProperty("网络端口")
     private Long servicePort;
 
-    public DevopsIngressPathVO() {
-    }
-
-    /**
-     * 构造函数
-     */
-    public DevopsIngressPathVO(String path, Long serviceId, String serviceName, String serviceStatus) {
-        this.path = path;
-        this.serviceId = serviceId;
-        this.serviceName = serviceName;
-        this.serviceStatus = serviceStatus;
-    }
 
     public String getPath() {
         return path;
@@ -75,22 +65,23 @@ public class DevopsIngressPathVO {
         this.servicePort = servicePort;
     }
 
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) {
-            return true;
-        }
-        if (o == null || getClass() != o.getClass()) {
-            return false;
-        }
-        DevopsIngressPathVO that = (DevopsIngressPathVO) o;
-        return Objects.equals(path, that.path)
-                && Objects.equals(serviceId, that.serviceId)
-                && Objects.equals(servicePort, that.servicePort);
+    public String getServiceError() {
+        return serviceError;
+    }
+
+    public void setServiceError(String serviceError) {
+        this.serviceError = serviceError;
     }
 
     @Override
-    public int hashCode() {
-        return Objects.hash(path, serviceId);
+    public String toString() {
+        return "DevopsIngressPathVO{" +
+                "path='" + path + '\'' +
+                ", serviceId=" + serviceId +
+                ", serviceName='" + serviceName + '\'' +
+                ", serviceStatus='" + serviceStatus + '\'' +
+                ", serviceError='" + serviceError + '\'' +
+                ", servicePort=" + servicePort +
+                '}';
     }
 }

@@ -1,30 +1,41 @@
 package io.choerodon.devops.infra.dto;
 
 
-import java.util.Date;
 import javax.persistence.*;
 
-import io.choerodon.mybatis.entity.BaseDTO;
+import org.hzero.starter.keyencrypt.core.Encrypt;
+
+import io.choerodon.mybatis.annotation.ModifyAudit;
+import io.choerodon.mybatis.annotation.VersionAudit;
+import io.choerodon.mybatis.domain.AuditDomain;
 
 /**
  * Created by Zenger on 2018/4/3.
  */
-
+@ModifyAudit
+@VersionAudit
 @Table(name = "devops_app_service_version")
-public class AppServiceVersionDTO extends BaseDTO {
+public class AppServiceVersionDTO extends AuditDomain {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @GeneratedValue(strategy = GenerationType.AUTO)
     private Long id;
     private String version;
+    @Encrypt
     private Long appServiceId;
+    @Encrypt
     private Long valueId;
+    @Encrypt
     private Long readmeValueId;
     private String image;
     private String commit;
     private String repository;
+    @Encrypt
     private Long harborConfigId;
+    @Encrypt
     private Long helmConfigId;
+    private String repoType;
+    private String ref;
 
     @Transient
     private String appServiceName;
@@ -36,6 +47,27 @@ public class AppServiceVersionDTO extends BaseDTO {
     private String appServiceType;
     @Transient
     private String readme;
+    @Transient
+    private String values;
+    @Transient
+    private String chartName;
+
+
+    public String getChartName() {
+        return chartName;
+    }
+
+    public void setChartName(String chartName) {
+        this.chartName = chartName;
+    }
+
+    public String getValues() {
+        return values;
+    }
+
+    public void setValues(String values) {
+        this.values = values;
+    }
 
     public String getReadme() {
         return readme;
@@ -155,5 +187,21 @@ public class AppServiceVersionDTO extends BaseDTO {
 
     public void setHelmConfigId(Long helmConfigId) {
         this.helmConfigId = helmConfigId;
+    }
+
+    public String getRepoType() {
+        return repoType;
+    }
+
+    public void setRepoType(String repoType) {
+        this.repoType = repoType;
+    }
+
+    public String getRef() {
+        return ref;
+    }
+
+    public void setRef(String ref) {
+        this.ref = ref;
     }
 }

@@ -58,10 +58,34 @@ public class SagaTaskCodeConstants {
     public static final String DEVOPS_GITLAB_PIPELINE = "devopsGitlabPipeline";
 
     /**
+     * gitlab pipeline事件
+     */
+    public static final String DEVOPS_GITLAB_CI_PIPELINE = "devopsGitlabCiPipeline";
+
+    /**
+     * gitlab pipeline事件
+     */
+    public static final String DEVOPS_GITLAB_CD_PIPELINE = "devopsGitlabCDPipeline";
+
+    /**
+     * 触发纯cd流水线
+     */
+    public static final String DEVOPS_TRIGGER_SIMPLE_CD_PIPELINE = "devopsTriggerSimpleCdPipeline";
+
+    /**
      * 创建流水线自动部署实例
      */
     public static final String DEVOPS_PIPELINE_CREATE_INSTANCE = "devops-pipeline-create-instance";
 
+    /**
+     * 创建流水线环境自动部署实例
+     */
+    public static final String DEVOPS_PIPELINE_ENV_CREATE_INSTANCE = "devops-pipeline-env-create-instance";
+
+    /**
+     * 组织层创建用户
+     */
+    public static final String ORG_USER_CREAT = "iam-create-org-user";
     /**
      * devops创建分支
      */
@@ -81,6 +105,16 @@ public class SagaTaskCodeConstants {
      * devops创建域名
      */
     public static final String DEVOPS_CREATE_INGRESS = "devopsCreateIngress";
+
+    /**
+     * devops创建PVC
+     */
+    public static final String DEVOPS_CREATE_PERSISTENTVOLUMECLAIM = "devopsCreatePersistentVolumeClaim";
+
+    /**
+     * devops创建PV
+     */
+    public static final String DEVOPS_CREATE_PERSISTENTVOLUME = "devopsCreatePersistentVolume";
 
     /**
      * 初始化Demo环境的项目相关数据
@@ -204,11 +238,26 @@ public class SagaTaskCodeConstants {
     public static final String DEVOPS_APP_DELETE = "devops-delete-app-service";
 
     /**
-     * 应用市场下载失败删除gitlab相关项目
+     * DevOps消费添加admin用户事件
      */
-    public static final String DEVOPS_MARKET_DELETE_GITLAB_PRO = "devops-market-failed-delete-gitlab-pro";
+    public static final String DEVOPS_ADD_ADMIN = "devops-add-admin";
+
+    /**
+     * DevOps消费删除admin用户U事件
+     */
+    public static final String DEVOPS_DELETE_ADMIN = "devops-delete-admin";
 
 
+    /**
+     * DevOps消费批量部署事件
+     */
+    public static final String DEVOPS_BATCH_DEPLOYMENT = "devops-handle-batch-deployment";
+
+
+    /**
+     * devops 主机部署
+     */
+    public static final String DEVOPS_HOST_FEPLOY = "devops-host-deploy";
 
     private SagaTaskCodeConstants() {
     }

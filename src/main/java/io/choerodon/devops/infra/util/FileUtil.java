@@ -88,6 +88,21 @@ public class FileUtil {
     }
 
     /**
+     * 替换变量
+     *
+     * @param rawString 原始的字符串
+     * @param params    要替换的字符串映射
+     * @return 替换后的字符串
+     */
+    public static String replaceReturnString(final String rawString, Map<String, String> params) {
+        String result = rawString;
+        for (Map.Entry<String, String> entry : params.entrySet()) {
+            result = result.replace(entry.getKey(), entry.getValue());
+        }
+        return result;
+    }
+
+    /**
      * 通过inputStream流 替换文件的参数 ，将file转换为流渲染参数后写回文件
      *
      * @param file   文件
@@ -313,6 +328,31 @@ public class FileUtil {
         return null;
     }
 
+    /**
+     * 从文件夹中查找指定文件, 广度优先遍历
+     */
+    public static File queryFileFromFilesBFS(File file, String fileName) {
+        File[] files = file.listFiles();
+        if (files != null) {
+            Queue<File> fileQueue = new ArrayDeque<>();
+            // 将当前目录下的文件先加入队列
+            ArrayUtil.offerAllToQueue(fileQueue, files);
+
+            File current;
+            // 遍历队列, 取出队列中元素
+            while ((current = fileQueue.poll()) != null) {
+                if (current.isDirectory()) {
+                    // 如果是目录, 将目录下的文件加入队列尾部
+                    ArrayUtil.offerAllToQueue(fileQueue, current.listFiles());
+                }
+                if (current.getName().equals(fileName)) {
+                    return current;
+                }
+            }
+        }
+        return null;
+    }
+
     public static List<String> getFilesPath(String filepath) {
         File file = new File(filepath);
         List<String> filepaths = getFilesPath(file);
@@ -431,6 +471,7 @@ public class FileUtil {
         try {
 
             String command = EXEC_PATH + " " + path;
+            // TODO 这里每次执行都是开启了一个新进程，可能开销不小
             Process p = Runtime.getRuntime().exec(command);
 
             stdInput = new BufferedReader(new
@@ -944,26 +985,28 @@ public class FileUtil {
         return res.toString();
     }
 
-
-    public static List<String> getSshKey(String path) {
-        List<String> sshkeys = new ArrayList<>();
+    /**
+     * 生成一对RSA的ssh公私钥
+     *
+     * @param publicKeyComment 公钥的注释
+     * @return 列表第一个元素为私钥，第二个为公钥
+     */
+    public static List<String> getSshKey(String publicKeyComment) {
+        List<String> sshKeyPair = new ArrayList<>();
         int type = KeyPair.RSA;
-        String strPath = "id_rsa";
         JSch jsch = new JSch();
-        try {
-            KeyPair kpair = KeyPair.genKeyPair(jsch, type);
-            kpair.writePrivateKey(strPath);
-            kpair.writePublicKey(strPath + ".pub", path);
-            kpair.dispose();
-            FileUtil.moveFiles("id_rsa", "ssh/" + path);
-            FileUtil.moveFiles("id_rsa.pub", "ssh/" + path);
-            sshkeys.add(FileUtil.getFileContent(new File("ssh/" + path + "/id_rsa")));
-            sshkeys.add(FileUtil.getFileContent(new File("ssh/" + path + "/id_rsa.pub")));
-            FileUtil.deleteDirectory(new File("ssh"));
+        try (ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
+            KeyPair keyPair = KeyPair.genKeyPair(jsch, type);
+            keyPair.writePrivateKey(outputStream);
+            sshKeyPair.add(new String(outputStream.toByteArray()));
+            outputStream.reset();
+            keyPair.writePublicKey(outputStream, publicKeyComment);
+            sshKeyPair.add(new String(outputStream.toByteArray()));
+            keyPair.dispose();
         } catch (Exception e) {
             logger.info(e.getMessage());
         }
-        return sshkeys;
+        return sshKeyPair;
     }
 
 

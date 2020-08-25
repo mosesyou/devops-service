@@ -3,19 +3,19 @@ package io.choerodon.devops.app.service.impl;
 import java.util.List;
 import java.util.Map;
 
-import com.github.pagehelper.PageHelper;
-import com.github.pagehelper.PageInfo;
 import com.google.gson.Gson;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
-import io.choerodon.base.domain.PageRequest;
+import io.choerodon.core.domain.Page;
 import io.choerodon.core.exception.CommonException;
 import io.choerodon.devops.app.service.PipelineRecordService;
 import io.choerodon.devops.infra.dto.PipelineRecordDTO;
 import io.choerodon.devops.infra.mapper.PipelineRecordMapper;
 import io.choerodon.devops.infra.util.PageRequestUtil;
 import io.choerodon.devops.infra.util.TypeUtil;
+import io.choerodon.mybatis.pagehelper.PageHelper;
+import io.choerodon.mybatis.pagehelper.domain.PageRequest;
 
 /**
  * Creator: ChangpingShi0213@gmail.com
@@ -30,11 +30,11 @@ public class PipelineRecordServiceImpl implements PipelineRecordService {
     private PipelineRecordMapper pipelineRecordMapper;
 
     @Override
-    public PageInfo<PipelineRecordDTO> basePageByOptions(Long projectId, Long pipelineId, PageRequest pageRequest, String params, Map<String, Object> classifyParam) {
+    public Page<PipelineRecordDTO> basePageByOptions(Long projectId, Long pipelineId, PageRequest pageable, String params, Map<String, Object> classifyParam) {
         Map maps = gson.fromJson(params, Map.class);
         Map<String, Object> searchParamMap = TypeUtil.cast(maps.get(TypeUtil.SEARCH_PARAM));
         List<String> paramList = TypeUtil.cast(maps.get(TypeUtil.PARAMS));
-        return PageHelper.startPage(pageRequest.getPage(), pageRequest.getSize(), PageRequestUtil.getOrderBy(pageRequest)).doSelectPageInfo(() ->
+        return PageHelper.doPageAndSort(PageRequestUtil.simpleConvertSortForPage(pageable), () ->
                 pipelineRecordMapper.listByOptions(projectId, pipelineId, searchParamMap, paramList, classifyParam));
     }
 
@@ -43,7 +43,7 @@ public class PipelineRecordServiceImpl implements PipelineRecordService {
         if (pipelineRecordMapper.insert(pipelineRecordDTO) != 1) {
             throw new CommonException("error.insert.pipeline.record");
         }
-        return pipelineRecordDTO;
+        return pipelineRecordMapper.selectByPrimaryKey(pipelineRecordDTO.getId());
     }
 
     @Override

@@ -2,8 +2,8 @@ import React, { createContext, useContext, useEffect, useMemo } from 'react';
 import { inject } from 'mobx-react';
 import { injectIntl } from 'react-intl';
 import { DataSet } from 'choerodon-ui/pro';
+import { Choerodon } from '@choerodon/boot';
 import DetailDataSet from './DetailDataSet';
-import HomeDataSet from './HomeDataSet';
 import useStore from './useStore';
 
 const Store = createContext();
@@ -23,25 +23,15 @@ export const StoreProvider = injectIntl(inject('AppState')(
     const url = useMemo(() => `/devops/v1/organizations/${organizationId}/organization_config`, [organizationId]);
 
     const detailDs = useMemo(() => new DataSet(DetailDataSet(intlPrefix, formatMessage, url)), [intlPrefix, formatMessage, url]);
-    const homeDs = useMemo(() => new DataSet(HomeDataSet()), []);
 
     const repositoryStore = useStore();
-
-    useEffect(() => {
-      homeDs.transport.read.url = `/devops/v1/organizations/${organizationId}/organization_config/default_config`;
-      homeDs.query();
-    }, [organizationId]);
 
     const value = {
       ...props,
       prefixCls: 'c7ncd-repository',
-      permissions: [
-        'devops-service.devops-organization-config.queryOrganizationDefaultConfig',
-        'devops-service.devops-organization-config.create',
-        'devops-service.devops-organization-config.query',
-      ],
+      permissions: ['choerodon.code.organization.setting.repository.ps.default'],
       intlPrefix,
-      homeDs,
+      promptMsg: formatMessage({ id: `${intlPrefix}.prompt.inform.title` }) + Choerodon.STRING_DEVIDER + formatMessage({ id: `${intlPrefix}.prompt.inform.message` }),
       detailDs,
       repositoryStore,
     };

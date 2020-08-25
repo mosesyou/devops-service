@@ -7,7 +7,7 @@ import { handlePromptError } from '../../../../../../utils';
 import HeaderButtons from '../../../../../../components/header-buttons';
 import DetailsModal from './details';
 import ValueModalContent from './values/Config';
-import UpgradeModalContent from './values/Upgrade';
+import UpgradeModalContent from './upgrade';
 import { useResourceStore } from '../../../../stores';
 import { useInstanceStore } from '../stores';
 
@@ -74,7 +74,7 @@ const IstModals = injectIntl(observer(() => {
         intlPrefix={intlPrefix}
         prefixCls={prefixCls}
         formatMessage={formatMessage}
-        refresh={refresh}
+        refresh={afterDeploy}
       />,
       afterClose: () => {
         istStore.setUpgradeValue({});
@@ -106,7 +106,7 @@ const IstModals = injectIntl(observer(() => {
         vo={deployVo}
         intlPrefix={intlPrefix}
         prefixCls={prefixCls}
-        refresh={refresh}
+        refresh={afterDeploy}
       />,
       afterClose: () => {
         istStore.setUpgradeValue({});
@@ -156,10 +156,15 @@ const IstModals = injectIntl(observer(() => {
   }
 
   function openRedeploy() {
+    const record = baseDs.current;
+    if (!record) return;
+
+    const versionName = record.get('commandVersion');
+
     Modal.open({
       key: redeployKey,
       title: formatMessage({ id: `${intlPrefix}.modal.redeploy` }),
-      children: <FormattedMessage id={`${intlPrefix}.modal.redeploy.tips`} />,
+      children: <FormattedMessage id={`${intlPrefix}.modal.redeploy.tips`} values={{ versionName }} />,
       onOk: redeploy,
     });
   }
@@ -168,31 +173,39 @@ const IstModals = injectIntl(observer(() => {
     try {
       const result = await istStore.redeploy(projectId, id);
       if (handlePromptError(result, false)) {
-        refresh();
+        afterDeploy();
       }
     } catch (e) {
       Choerodon.handleResponseError(e);
     }
   }
 
+  function afterDeploy() {
+    detailsStore.setTargetCount({});
+    refresh();
+  }
+
   function getHeader() {
+    const [envId] = parentId.split('**');
+    const envRecord = treeDs.find((record) => record.get('key') === envId);
+    const connect = envRecord && envRecord.get('connect');
     const record = baseDs.current;
     const status = record ? record.get('status') : '';
-    const btnDisabled = !status || (status !== 'failed' && status !== 'running');
+    const btnDisabled = !connect || !status || (status !== 'failed' && status !== 'running');
 
     const buttons = [{
       name: formatMessage({ id: `${intlPrefix}.modal.values` }),
       icon: 'rate_review1',
       handler: openValueModal,
       display: true,
-      permissions: ['devops-service.app-service-instance.deploy'],
+      permissions: ['choerodon.code.project.deploy.app-deployment.resource.ps.values'],
       group: 1,
       disabled: btnDisabled,
     }, {
       name: formatMessage({ id: `${intlPrefix}.modal.modify` }),
       icon: 'backup_line',
       handler: openUpgradeModal,
-      permissions: ['devops-service.app-service-instance.deploy'],
+      permissions: ['choerodon.code.project.deploy.app-deployment.resource.ps.example'],
       display: true,
       group: 1,
       disabled: btnDisabled,
@@ -200,17 +213,10 @@ const IstModals = injectIntl(observer(() => {
       name: formatMessage({ id: `${intlPrefix}.modal.redeploy` }),
       icon: 'redeploy_line',
       handler: openRedeploy,
-      permissions: ['devops-service.app-service-instance.restart'],
+      permissions: ['choerodon.code.project.deploy.app-deployment.resource.ps.redeploy'],
       display: true,
       group: 1,
       disabled: btnDisabled,
-    }, {
-      name: formatMessage({ id: `${intlPrefix}.modal.detail` }),
-      icon: 'find_in_page',
-      handler: openDetailModal,
-      display: true,
-      group: 2,
-      disabled: !status,
     }, {
       name: formatMessage({ id: 'refresh' }),
       icon: 'refresh',

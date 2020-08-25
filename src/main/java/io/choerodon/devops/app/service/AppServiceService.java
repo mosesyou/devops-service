@@ -1,18 +1,21 @@
 package io.choerodon.devops.app.service;
 
-import com.github.pagehelper.PageInfo;
-import io.choerodon.base.domain.PageRequest;
+import java.util.Date;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import javax.annotation.Nullable;
+
+import io.choerodon.core.domain.Page;
 import io.choerodon.devops.api.vo.*;
 import io.choerodon.devops.app.eventhandler.payload.AppServiceImportPayload;
 import io.choerodon.devops.app.eventhandler.payload.DevOpsAppImportServicePayload;
 import io.choerodon.devops.app.eventhandler.payload.DevOpsAppServicePayload;
 import io.choerodon.devops.infra.dto.AppServiceDTO;
 import io.choerodon.devops.infra.dto.UserAttrDTO;
+import io.choerodon.devops.infra.dto.iam.IamUserDTO;
 import io.choerodon.devops.infra.enums.GitPlatformType;
-
-import java.util.Date;
-import java.util.List;
-import java.util.Set;
+import io.choerodon.mybatis.pagehelper.domain.PageRequest;
 
 /**
  * Created by younger on 2018/3/28.
@@ -28,6 +31,15 @@ public interface AppServiceService {
      */
     AppServiceRepVO create(Long projectId, AppServiceReqVO applicationReqDTO);
 
+    /**
+     * 内部查询项目下所有应用服务 / 不区分权限
+     *
+     * @param projectId 项目id
+     * @param params    查询参数
+     * @param pageable  分页参数
+     * @return 应用服务列表
+     */
+    Page<AppServiceRepVO> internalListAllInProject(Long projectId, String params, PageRequest pageable);
 
     /**
      * 项目下查询单个服务信息
@@ -69,22 +81,23 @@ public interface AppServiceService {
     /**
      * 组织下分页查询服务
      *
-     * @param projectId   项目id
-     * @param isActive    是否启用
-     * @param appMarket   服务市场导入
-     * @param hasVersion  是否存在版本
-     * @param pageRequest 分页参数
-     * @param params      参数
+     * @param projectId  项目id
+     * @param isActive   是否启用
+     * @param appMarket  服务市场导入
+     * @param hasVersion 是否存在版本
+     * @param pageable   分页参数
+     * @param params     参数
      * @return Page
      */
-    PageInfo<AppServiceRepVO> pageByOptions(Long projectId,
-                                            Boolean isActive,
-                                            Boolean hasVersion,
-                                            Boolean appMarket,
-                                            String type,
-                                            Boolean doPage,
-                                            PageRequest pageRequest,
-                                            String params);
+    Page<AppServiceRepVO> pageByOptions(Long projectId,
+                                        Boolean isActive,
+                                        Boolean hasVersion,
+                                        Boolean appMarket,
+                                        String type,
+                                        Boolean doPage,
+                                        PageRequest pageable,
+                                        String params,
+                                        Boolean checkMember);
 
     /**
      * 处理服务创建逻辑
@@ -104,9 +117,11 @@ public interface AppServiceService {
     /**
      * 设置服务创建失败状态
      *
-     * @param input 服务信息
+     * @param input        服务信息
+     * @param projectId    项目id
+     * @param appServiceId 应用服务id
      */
-    void setAppErrStatus(String input, Long projectId);
+    void setAppErrStatus(String input, Long projectId, Long appServiceId);
 
     /**
      * 项目下服务查询ci脚本文件
@@ -114,7 +129,7 @@ public interface AppServiceService {
      * @param token token
      * @return File
      */
-    String queryFile(String token, String type);
+    String queryFile(String token);
 
     /**
      * 根据环境id获取已部署正在运行实例的服务
@@ -129,12 +144,12 @@ public interface AppServiceService {
     /**
      * 根据环境id获取已部署正在运行实例的服务
      *
-     * @param projectId   项目id
-     * @param envId       环境Id
-     * @param pageRequest 分页参数
+     * @param projectId 项目id
+     * @param envId     环境Id
+     * @param pageable  分页参数
      * @return baseList of ApplicationRepDTO
      */
-    PageInfo<AppServiceCodeVO> pageByIds(Long projectId, Long envId, Long appServiceId, PageRequest pageRequest);
+    Page<AppServiceCodeVO> pageByIds(Long projectId, Long envId, Long appServiceId, PageRequest pageable);
 
     /**
      * 项目下查询所有已经启用的服务
@@ -175,6 +190,24 @@ public interface AppServiceService {
     void checkCode(Long projectId, String code);
 
     /**
+     * 创建服务判断名称是否存在
+     *
+     * @param projectId 项目Id
+     * @param name      服务name
+     * @return true表示通过
+     */
+    boolean isNameUnique(Long projectId, String name);
+
+    /**
+     * 创建服务判断编码是否存在
+     *
+     * @param projectId 项目id
+     * @param code      服务code
+     * @return true表示通过
+     */
+    boolean isCodeUnique(Long projectId, String code);
+
+    /**
      * 批量校验应用服务code和name
      *
      * @param projectId
@@ -186,22 +219,22 @@ public interface AppServiceService {
     /**
      * 项目下查询已经启用有版本未发布的服务
      *
-     * @param projectId   项目id
-     * @param pageRequest 分页参数
-     * @param params      查询参数
+     * @param projectId 项目id
+     * @param pageable  分页参数
+     * @param params    查询参数
      * @return baseList of ApplicationRepDTO
      */
-    PageInfo<AppServiceReqVO> pageByActiveAndPubAndVersion(Long projectId, PageRequest pageRequest, String params);
+    Page<AppServiceReqVO> pageByActiveAndPubAndVersion(Long projectId, PageRequest pageable, String params);
 
     /**
      * 项目下分页查询代码仓库
      *
-     * @param projectId   项目id
-     * @param pageRequest 分页参数
-     * @param params      查询参数
+     * @param projectId 项目id
+     * @param pageable  分页参数
+     * @param params    查询参数
      * @return page of ApplicationRepDTO
      */
-    PageInfo<AppServiceRepVO> pageCodeRepository(Long projectId, PageRequest pageRequest, String params);
+    Page<AppServiceRepVO> pageCodeRepository(Long projectId, PageRequest pageable, String params);
 
     /**
      * 获取服务下所有用户权限
@@ -228,7 +261,7 @@ public interface AppServiceService {
      * @param appServiceImportVO 导入操作的相关信息
      * @return response
      */
-    AppServiceRepVO importApp(Long projectId, AppServiceImportVO appServiceImportVO);
+    AppServiceRepVO importApp(Long projectId, AppServiceImportVO appServiceImportVO, Boolean isTemplate);
 
     /**
      * 根据服务code查询服务
@@ -255,17 +288,19 @@ public interface AppServiceService {
     /**
      * 校验chart配置信息是否正确
      *
-     * @param url chartmusume地址
-     * @return Boolean
+     * @param url      ChartMuseum地址
+     * @param username 用户名
+     * @param password 密码
+     * @return true如果通过 (未通过则抛出错误信息)
      */
-    Boolean checkChart(String url);
+    Boolean checkChart(String url, @Nullable String username, @Nullable String password);
 
     /**
      * 查看sonarqube相关信息
      *
      * @param projectId    项目Id
      * @param appServiceId 服务id
-     * @return
+     * @return 信息
      */
     SonarContentsVO getSonarContent(Long projectId, Long appServiceId);
 
@@ -274,7 +309,7 @@ public interface AppServiceService {
      *
      * @param projectId    项目Id
      * @param appServiceId 服务id
-     * @return
+     * @return 报表
      */
     SonarTableVO getSonarTable(Long projectId, Long appServiceId, String type, Date startTime, Date endTime);
 
@@ -292,31 +327,30 @@ public interface AppServiceService {
      * 获取共享服务
      *
      * @param projectId
-     * @param pageRequest
+     * @param pageable
      * @param params
      * @return
      */
-    PageInfo<AppServiceRepVO> pageShareAppService(Long projectId,boolean doPage,PageRequest pageRequest, String params);
+    Page<AppServiceRepVO> pageShareAppService(Long projectId, boolean doPage, PageRequest pageable, String params);
 
     /**
      * 根据appServiceId查询服务服务有权限的项目成员和项目所有者
      *
      * @param projectId
      * @param appServiceId
-     * @param pageRequest
+     * @param pageable
      * @param searchParam
      */
-    PageInfo<DevopsUserPermissionVO> pagePermissionUsers(Long projectId, Long appServiceId, PageRequest pageRequest, String searchParam);
+    Page<DevopsUserPermissionVO> pagePermissionUsers(Long projectId, Long appServiceId, PageRequest pageable, String searchParam);
+
+    Page<DevopsUserPermissionVO> combineOwnerAndMember(List<DevopsUserPermissionVO> allProjectMembers, List<DevopsUserPermissionVO> allProjectOwners, PageRequest pageable);
+
+    DevopsUserPermissionVO iamUserTOUserPermissionVO(IamUserDTO iamUserDTO, Boolean isGitlabProjectOwner);
 
     /**
      * 根据appServiceId查询服务服务所有没有权限的项目成员
-     *
-     * @param projectId
-     * @param appServiceId
-     * @param params
-     * @return
      */
-    List<DevopsUserPermissionVO> listMembers(Long projectId, Long appServiceId, String params);
+    Page<DevopsUserPermissionVO> listMembers(Long projectId, Long appServiceId, Long selectedIamUserId, PageRequest pageable, String params);
 
     /**
      * 更新服务服务权限
@@ -354,36 +388,40 @@ public interface AppServiceService {
 
     void setProjectHook(AppServiceDTO appServiceDTO, Integer projectId, String token, Integer userId);
 
+    /**
+     * 查询项目成员 项目下有权限的应用服务Id
+     *
+     * @param organizationId
+     * @param projectId
+     * @param userId
+     * @return
+     */
+    Set<Long> getMemberAppServiceIds(Long organizationId, Long projectId, Long userId);
+
+
     void baseCheckApp(Long projectId, Long appServiceId);
 
     AppServiceDTO baseUpdate(AppServiceDTO appServiceDTO);
 
-    void updateApplicationStatus(AppServiceDTO appServiceDTO);
-
     AppServiceDTO baseQuery(Long appServiceId);
 
-    PageInfo<AppServiceDTO> basePageByOptions(Long projectId, Boolean isActive, Boolean hasVersion, Boolean
-            appMarket,
-                                              String type, Boolean doPage, PageRequest pageRequest, String params);
+    Page<AppServiceDTO> basePageByOptions(Long projectId, Boolean isActive, Boolean hasVersion, Boolean appMarket,
+                                          String type, Boolean doPage, PageRequest pageable, String params, Boolean checkMember);
 
-    PageInfo<AppServiceDTO> basePageCodeRepository(Long projectId, PageRequest pageRequest, String params,
-                                                   Boolean isProjectOwner, Long userId);
+    Page<AppServiceDTO> basePageCodeRepository(Long projectId, PageRequest pageable, String params,
+                                               Boolean isProjectOwner, Long userId);
 
 
     AppServiceDTO baseQueryByCode(String code, Long projectId);
-
-    AppServiceDTO baseQueryByMktAppId(String code, Long mktAppId);
 
     AppServiceDTO baseQueryByCodeWithNullProject(String code);
 
     List<AppServiceDTO> baseListByEnvId(Long projectId, Long envId, String status);
 
-    PageInfo<AppServiceDTO> basePageByEnvId(Long projectId, Long envId, Long appServiceId, PageRequest pageRequest);
+    Page<AppServiceDTO> basePageByEnvId(Long projectId, Long envId, Long appServiceId, PageRequest pageable);
 
-    List<AppServiceDTO> baseListDeployedApp(Long projectId);
-
-    PageInfo<AppServiceDTO> basePageByActiveAndPubAndHasVersion(Long projectId, Boolean isActive,
-                                                                PageRequest pageRequest, String params);
+    Page<AppServiceDTO> basePageByActiveAndPubAndHasVersion(Long projectId, Boolean isActive,
+                                                            PageRequest pageable, String params);
 
     AppServiceDTO baseQueryByToken(String token);
 
@@ -395,6 +433,8 @@ public interface AppServiceService {
 
     List<AppServiceDTO> baseListByProjectIdAndSkipCheck(Long projectId);
 
+    List<AppServiceDTO> baseListByProjectIdWithNoSkipCheck(Long projectId);
+
     List<AppServiceDTO> baseListByProjectId(Long projectId);
 
     void baseUpdateHarborConfig(Long projectId, Long newConfigId, Long oldConfigId, boolean harborPrivate);
@@ -405,10 +445,11 @@ public interface AppServiceService {
 
     /**
      * 导入应用下根据组织共享或者市场下载的查询应用服务
+     * // 2020年05月14日19:20:34 更正： 市场逻辑去掉之后，应该mode只能是share了, 也就是share=true
      *
      * @return List<AppServiceGroupVO>
      */
-    PageInfo<AppServiceGroupInfoVO> pageAppServiceByMode(Long projectId, Boolean share, Long searchProjectId, String param, PageRequest pageRequest);
+    Page<AppServiceGroupInfoVO> pageAppServiceByMode(Long projectId, Boolean share, Long searchProjectId, String param, PageRequest pageable);
 
     /**
      * 查询所有应用服务
@@ -422,21 +463,51 @@ public interface AppServiceService {
 
     String getToken(Integer gitlabProjectId, String applicationDir, UserAttrDTO userAttrDTO);
 
+    AppServiceDTO queryByGitlabProjectId(Long gitlabProjectId);
+
     /**
      * 查询单个项目下的应用服务
      *
      * @param projectId
      * @return
      */
-    PageInfo<AppServiceVO> listAppByProjectId(Long projectId, Boolean doPage, PageRequest pageRequest, String params);
+    Page<AppServiceVO> listAppByProjectId(Long projectId, Boolean doPage, PageRequest pageable, String params);
 
     /**
      * 批量查询应用服务
      *
-     * @param ids
-     * @return
+     * @param projectId    项目id
+     * @param ids          应用服务id
+     * @param doPage       是否分页
+     * @param withVersions 是否需要版本信息
+     * @param pageable     分页参数
+     * @param params       查询参数
+     * @return 应用服务信息
      */
-    PageInfo<AppServiceVO> listAppServiceByIds(Long projectId,Set<Long> ids, Boolean doPage, PageRequest pageRequest, String params);
+    Page<AppServiceVO> listAppServiceByIds(Long projectId, Set<Long> ids, Boolean doPage, boolean withVersions, PageRequest pageable, String params);
+
+
+    /**
+     * 批量查询应用服务
+     *
+     * @param ids      应用服务id
+     * @param doPage   是否分页
+     * @param pageable 分页参数
+     * @param params   查询参数
+     * @return 应用服务信息
+     */
+    Page<AppServiceRepVO> listAppServiceByIds(Set<Long> ids, Boolean doPage, PageRequest pageable, String params);
+
+    /**
+     * 通过一组id分页查询或者不传id时进行分页查询
+     *
+     * @param projectId 项目id
+     * @param ids       应用服务Id
+     * @param doPage    是否分页
+     * @param pageable  分页参数
+     * @return 结果
+     */
+    Page<AppServiceVO> listByIdsOrPage(Long projectId, @Nullable Set<Long> ids, @Nullable Boolean doPage, PageRequest pageable);
 
     /**
      * 根据导入应用类型查询应用所属的项目集合
@@ -461,6 +532,64 @@ public interface AppServiceService {
                        String oldGroupName,
                        Boolean isGetWorkingDirectory);
 
-    String checkAppServiceType(Long projectId,AppServiceDTO appServiceDTO);
-    void deleteAppServiceSage(Long projectId,Long appServiceId);
+    String checkAppServiceType(Long projectId, AppServiceDTO appServiceDTO);
+
+    void deleteAppServiceSage(Long projectId, Long appServiceId);
+
+    List<AppServiceTemplateVO> listServiceTemplates();
+
+    AppServiceMsgVO checkAppService(Long projectId, Long appServiceId);
+
+    /**
+     * 列出项目下有版本的普通应用服务，任何角色可以查到所有的的应用服务
+     * 无论有没有权限
+     *
+     * @param projectId 项目id
+     * @return 有版本的应用服务列表
+     */
+    List<AppServiceSimpleVO> listAppServiceHavingVersions(Long projectId);
+
+    Map<Long, Integer> countByProjectId(List<Long> longList);
+
+    /**
+     * 判断项目下是否还能创建应用服务
+     *
+     * @param projectId 项目id
+     */
+    Boolean checkEnableCreateAppSvc(Long projectId);
+
+    /**
+     * 校验用户是否拥有应用服务权限
+     *
+     * @param appSvcId 应用服务id
+     * @param userId   用户id
+     * @return
+     */
+    boolean checkAppServicePermissionForUser(Long appSvcId, Long userId);
+
+    /**
+     * 分页查询用于创建CI流水线的应用服务
+     * 1. 默认查询20条
+     * 2. 要用户有权限的
+     * 3. 要创建成功且启用的
+     * 4. 要能够模糊搜索
+     * 5. 不能查出已经有流水线的
+     * 6. 要有master分支的
+     *
+     * @param projectId   项目id
+     * @param pageRequest 分页参数
+     * @param params      查询参数，用于搜索
+     * @return 应用服务列表
+     */
+    List<AppServiceSimpleVO> pageAppServiceToCreateCiPipeline(Long projectId, PageRequest pageRequest, @Nullable String params);
+
+    /**
+     * 查出不带.git后缀的gitlab仓库地址
+     *
+     * @param appServiceId 应用服务id
+     * @return 地址
+     */
+    String calculateGitlabProjectUrlWithSuffix(Long appServiceId);
+
+    void fixAppServiceVersion();
 }

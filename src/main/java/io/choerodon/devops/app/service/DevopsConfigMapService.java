@@ -1,13 +1,12 @@
 package io.choerodon.devops.app.service;
 
-import java.util.List;
-
-import com.github.pagehelper.PageInfo;
-
-import io.choerodon.base.domain.PageRequest;
-import io.choerodon.devops.api.vo.DevopsConfigMapVO;
+import io.choerodon.core.domain.Page;
 import io.choerodon.devops.api.vo.DevopsConfigMapRespVO;
+import io.choerodon.devops.api.vo.DevopsConfigMapVO;
 import io.choerodon.devops.infra.dto.DevopsConfigMapDTO;
+import io.choerodon.mybatis.pagehelper.domain.PageRequest;
+
+import java.util.List;
 
 public interface DevopsConfigMapService {
 
@@ -15,15 +14,17 @@ public interface DevopsConfigMapService {
 
     void deleteByGitOps(Long configMapId);
 
-    void delete(Long configMapId);
+    void delete(Long projectId, Long configMapId);
 
     void checkName(Long envId, String name);
+
+    boolean isNameUnique(Long envId, String name);
 
     DevopsConfigMapRespVO createOrUpdateByGitOps(DevopsConfigMapVO devopsConfigMapVO, Long userId);
 
     DevopsConfigMapRespVO query(Long configMapId);
 
-    PageInfo<DevopsConfigMapRespVO> pageByOptions(Long projectId, Long envId, PageRequest pageRequest, String searchParam, Long appServiceId);
+    Page<DevopsConfigMapRespVO> pageByOptions(Long projectId, Long envId, PageRequest pageable, String searchParam, Long appServiceId);
 
     DevopsConfigMapDTO baseQueryByEnvIdAndName(Long envId, String name);
 
@@ -35,8 +36,10 @@ public interface DevopsConfigMapService {
 
     void baseDelete(Long id);
 
-    PageInfo<DevopsConfigMapDTO> basePageByEnv(Long envId, PageRequest pageRequest, String params, Long appServiceId);
+    Page<DevopsConfigMapDTO> basePageByEnv(Long envId, PageRequest pageable, String params, Long appServiceId);
 
     List<DevopsConfigMapDTO> baseListByEnv(Long envId);
+
+    void baseDeleteByEnvId(Long envId);
 
 }

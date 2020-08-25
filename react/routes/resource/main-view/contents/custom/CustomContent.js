@@ -55,7 +55,7 @@ const CustomContent = observer(() => {
         error={error}
         clickAble={!disabled}
         onClick={openShow}
-        permissionCode={['devops-service.devops-customize-resource.createResource']}
+        permissionCode={['choerodon.code.project.deploy.app-deployment.resource.ps.custome-resource.update']}
       />
     );
   }
@@ -72,7 +72,7 @@ const CustomContent = observer(() => {
     }
     const buttons = [
       {
-        service: ['devops-service.devops-customize-resource.deleteResource'],
+        service: ['choerodon.code.project.deploy.app-deployment.resource.ps.custom-resource.delete'],
         text: formatMessage({ id: 'delete' }),
         action: handleDelete,
       },
@@ -119,10 +119,10 @@ const CustomContent = observer(() => {
         border={false}
         queryBar="bar"
       >
-        <Column name="name" renderer={renderName} />
+        <Column name="name" renderer={renderName} sortable />
         <Column renderer={renderAction} width="0.7rem" />
         <Column name="k8sKind" />
-        <Column name="lastUpdateDate" renderer={renderTime} width="1rem" />
+        <Column name="lastUpdateDate" renderer={renderTime} width="1rem" sortable />
       </Table>
     </div>
   );

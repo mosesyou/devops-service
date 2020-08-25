@@ -4,6 +4,9 @@ package io.choerodon.devops.api.vo;
 import java.util.Date;
 
 import io.swagger.annotations.ApiModelProperty;
+import org.hzero.starter.keyencrypt.core.Encrypt;
+
+import io.choerodon.devops.infra.dto.harbor.HarborRepoConfigDTO;
 
 /**
  * @author younger
@@ -11,6 +14,7 @@ import io.swagger.annotations.ApiModelProperty;
  */
 public class AppServiceRepVO {
     @ApiModelProperty("应用服务id")
+    @Encrypt
     private Long id;
 
     @ApiModelProperty("应用服务名称")
@@ -27,6 +31,9 @@ public class AppServiceRepVO {
 
     @ApiModelProperty("应用服务对应的gitlab仓库地址")
     private String repoUrl;
+
+    @ApiModelProperty("应用服务对应的gitlab的仓库的ssh协议克隆地址")
+    private String sshRepositoryUrl;
 
     @ApiModelProperty("应用服务是否同步完成，false表示正在处理中")
     private Boolean synchro;
@@ -52,8 +59,9 @@ public class AppServiceRepVO {
     @ApiModelProperty("应用服务数据库纪录的版本号")
     private Long objectVersionNumber;
 
+
     @ApiModelProperty("应用服务对应的harbor配置信息")
-    private DevopsConfigVO harbor;
+    private HarborRepoConfigDTO harborRepoConfigDTO;
 
     @ApiModelProperty("应用服务对应的chart配置信息")
     private DevopsConfigVO chart;
@@ -85,12 +93,26 @@ public class AppServiceRepVO {
     @ApiModelProperty("是否是空仓库(是否没有分支)")
     private Boolean emptyRepository;
 
-    public DevopsConfigVO getHarbor() {
-        return harbor;
+    @ApiModelProperty("应用服务类型")
+    private String serviceType;
+
+    @ApiModelProperty("来源项目名")
+    private String shareProjectName;
+
+    public String getShareProjectName() {
+        return shareProjectName;
     }
 
-    public void setHarbor(DevopsConfigVO harbor) {
-        this.harbor = harbor;
+    public void setShareProjectName(String shareProjectName) {
+        this.shareProjectName = shareProjectName;
+    }
+
+    public HarborRepoConfigDTO getHarborRepoConfigDTO() {
+        return harborRepoConfigDTO;
+    }
+
+    public void setHarborRepoConfigDTO(HarborRepoConfigDTO harborRepoConfigDTO) {
+        this.harborRepoConfigDTO = harborRepoConfigDTO;
     }
 
     public DevopsConfigVO getChart() {
@@ -292,4 +314,22 @@ public class AppServiceRepVO {
     public void setEmptyRepository(Boolean emptyRepository) {
         this.emptyRepository = emptyRepository;
     }
+
+    public String getSshRepositoryUrl() {
+        return sshRepositoryUrl;
+    }
+
+    public void setSshRepositoryUrl(String sshRepositoryUrl) {
+        this.sshRepositoryUrl = sshRepositoryUrl;
+    }
+
+    public String getServiceType() {
+        return serviceType;
+    }
+
+    public void setServiceType(String serviceType) {
+        this.serviceType = serviceType;
+    }
+
 }
+

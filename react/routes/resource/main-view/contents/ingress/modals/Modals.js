@@ -5,7 +5,7 @@ import HeaderButtons from '../../../../../../components/header-buttons';
 import { useResourceStore } from '../../../../stores';
 import { useModalStore } from './stores';
 import { useIngressStore } from '../stores';
-import DomainModal from './domain-create';
+import DomainForm from '../../../components/domain-form';
 import { useMainStore } from '../../../stores';
 
 const modalKey = Modal.key();
@@ -17,6 +17,7 @@ const EnvModals = observer(() => {
   const {
     intlPrefix,
     intl: { formatMessage },
+    prefixCls,
     resourceStore,
     treeDs,
   } = useResourceStore();
@@ -38,11 +39,12 @@ const EnvModals = observer(() => {
       style: modalStyle,
       drawer: true,
       title: formatMessage({ id: 'domain.create.head' }),
-      children: <DomainModal
+      children: <DomainForm
         envId={parentId}
-        type="create"
-        store={ingressStore}
         refresh={refresh}
+        intlPrefix={intlPrefix}
+        prefixCls={prefixCls}
+        ingressStore={ingressStore}
       />,
       okText: formatMessage({ id: 'create' }),
     });
@@ -54,6 +56,7 @@ const EnvModals = observer(() => {
     const disabled = !connect;
 
     return ([{
+      permissions: ['choerodon.code.project.deploy.app-deployment.resource.ps.domain'],
       name: formatMessage({ id: `${intlPrefix}.create.ingress` }),
       icon: 'playlist_add',
       handler: openModal,

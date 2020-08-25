@@ -1,9 +1,12 @@
 package io.choerodon.devops.infra.dto;
 
+import io.choerodon.mybatis.annotation.ModifyAudit;
+import io.choerodon.mybatis.annotation.VersionAudit;
+import io.choerodon.mybatis.domain.AuditDomain;
+import io.swagger.annotations.ApiModelProperty;
+
 import javax.persistence.*;
 import java.util.Date;
-
-import io.choerodon.mybatis.entity.BaseDTO;
 
 
 /**
@@ -13,12 +16,13 @@ import io.choerodon.mybatis.entity.BaseDTO;
  * Time: 14:23
  * Description:
  */
-
+@ModifyAudit
+@VersionAudit
 @Table(name = "devops_merge_request")
-public class DevopsMergeRequestDTO extends BaseDTO {
+public class DevopsMergeRequestDTO extends AuditDomain {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @GeneratedValue(strategy = GenerationType.AUTO)
     private Long id;
 
     private Long gitlabProjectId;
@@ -53,15 +57,22 @@ public class DevopsMergeRequestDTO extends BaseDTO {
     @Transient
     private Long opened;
 
+    @Transient
+    private Long projectId;
+
+    @Transient
+    @ApiModelProperty("待这个用户审核的merge request的数量")
+    private Long auditCount;
+
     public DevopsMergeRequestDTO() {
     }
 
     /**
      * constructor a new merge request item
      *
-     * @param gitlabProjectId    devops application ID
-     * @param sourceBranch source branch to merge
-     * @param targetBranch target merge branch
+     * @param gitlabProjectId devops application ID
+     * @param sourceBranch    source branch to merge
+     * @param targetBranch    target merge branch
      */
     public DevopsMergeRequestDTO(Long gitlabProjectId, String sourceBranch, String targetBranch) {
         this.gitlabProjectId = gitlabProjectId;
@@ -188,5 +199,21 @@ public class DevopsMergeRequestDTO extends BaseDTO {
 
     public void setOpened(Long opened) {
         this.opened = opened;
+    }
+
+    public Long getAuditCount() {
+        return auditCount;
+    }
+
+    public void setAuditCount(Long auditCount) {
+        this.auditCount = auditCount;
+    }
+
+    public Long getProjectId() {
+        return projectId;
+    }
+
+    public void setProjectId(Long projectId) {
+        this.projectId = projectId;
     }
 }

@@ -34,6 +34,10 @@ const EnvModals = observer(() => {
 
   const [showModal, setShowModal] = useState(false);
 
+  useEffect(() => {
+    certStore.checkCertManager(projectId, parentId);
+  }, [projectId, parentId]);
+
   function refresh() {
     treeDs.query();
     certificateDs.query();
@@ -51,9 +55,10 @@ const EnvModals = observer(() => {
   function getButtons() {
     const envRecord = treeDs.find((record) => record.get('key') === parentId);
     const connect = envRecord.get('connect');
-    const disabled = !connect;
+    const disabled = !connect || !certStore.getHasCertManager;
 
     return ([{
+      permissions: ['choerodon.code.project.deploy.app-deployment.resource.ps.create-certifications'],
       name: formatMessage({ id: `${intlPrefix}.create.certificate` }),
       icon: 'playlist_add',
       handler: openModal,

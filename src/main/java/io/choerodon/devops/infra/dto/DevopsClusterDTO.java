@@ -1,19 +1,26 @@
 package io.choerodon.devops.infra.dto;
 
 
+import io.choerodon.mybatis.annotation.ModifyAudit;
+import io.choerodon.mybatis.annotation.VersionAudit;
+import io.choerodon.mybatis.domain.AuditDomain;
+import io.swagger.annotations.ApiModelProperty;
+
 import javax.persistence.GeneratedValue;
 import javax.persistence.GenerationType;
 import javax.persistence.Id;
 import javax.persistence.Table;
 
-import io.choerodon.mybatis.entity.BaseDTO;
-
-
+@ModifyAudit
+@VersionAudit
 @Table(name = "devops_cluster")
-public class DevopsClusterDTO extends BaseDTO {
+public class DevopsClusterDTO extends AuditDomain {
+
+    public static final String ENCRYPT_KEY = "devops_cluster";
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @GeneratedValue(strategy = GenerationType.AUTO)
+//    @Encrypt(DevopsClusterDTO.ENCRYPT_KEY)
     private Long id;
     /**
      * 这个集群所属项目的组织id， 不能为空
@@ -29,6 +36,11 @@ public class DevopsClusterDTO extends BaseDTO {
     private Boolean isInit;
     private Long createdBy;
     private Long projectId;
+
+    @ApiModelProperty("系统环境id, 用于部署集群相关的资源")
+    private Long systemEnvId;
+
+    private Long clientId;
 
     public Long getProjectId() {
         return projectId;
@@ -126,5 +138,21 @@ public class DevopsClusterDTO extends BaseDTO {
     @Override
     public void setCreatedBy(Long createdBy) {
         this.createdBy = createdBy;
+    }
+
+    public Long getSystemEnvId() {
+        return systemEnvId;
+    }
+
+    public void setSystemEnvId(Long systemEnvId) {
+        this.systemEnvId = systemEnvId;
+    }
+
+    public Long getClientId() {
+        return clientId;
+    }
+
+    public void setClientId(Long clientId) {
+        this.clientId = clientId;
     }
 }

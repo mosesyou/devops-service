@@ -7,8 +7,8 @@ import HeaderButtons from '../../../../../../components/header-buttons';
 import { useResourceStore } from '../../../../stores';
 import { useModalStore } from './stores';
 import { useNetworkStore } from '../stores';
-import CreateNetwork from './network-create';
 import { useMainStore } from '../../../stores';
+import CreateNetwork from './network-operation';
 
 const modalKey = Modal.key();
 const modalStyle = {
@@ -61,6 +61,7 @@ const EnvModals = observer(() => {
     const disabled = !connect;
 
     return ([{
+      permissions: ['choerodon.code.project.deploy.app-deployment.resource.ps.network'],
       name: formatMessage({ id: `${intlPrefix}.create.network` }),
       icon: 'playlist_add',
       handler: openModal,

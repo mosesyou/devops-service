@@ -1,23 +1,30 @@
 package io.choerodon.devops.app.service;
 
 
-import com.github.pagehelper.PageInfo;
+import java.util.Date;
+import java.util.List;
 
-import io.choerodon.base.domain.PageRequest;
+import io.choerodon.core.domain.Page;
+import io.choerodon.devops.api.vo.AppServiceInstanceForRecordVO;
+import io.choerodon.devops.api.vo.DeployRecordCountVO;
 import io.choerodon.devops.api.vo.DevopsDeployRecordVO;
 import io.choerodon.devops.infra.dto.DevopsDeployRecordDTO;
+import io.choerodon.devops.infra.dto.DevopsDeployRecordInstanceDTO;
+import io.choerodon.mybatis.pagehelper.domain.PageRequest;
 
 /**
  * Created by Sheep on 2019/7/29.
  */
 public interface DevopsDeployRecordService {
 
-    PageInfo<DevopsDeployRecordVO> pageByProjectId(Long projectId, String params, PageRequest pageRequest);
+    Page<DevopsDeployRecordVO> pageByProjectId(Long projectId, String params, PageRequest pageable);
 
 
-    PageInfo<DevopsDeployRecordDTO> basePageByProjectId(Long projectId, String params, PageRequest pageRequest);
+    Page<DevopsDeployRecordDTO> basePageByProjectId(Long projectId, String params, PageRequest pageable);
 
     void baseCreate(DevopsDeployRecordDTO devopsDeployRecordDTO);
+
+    void createRecordForBatchDeployment(Long projectId, Long envId, List<DevopsDeployRecordInstanceDTO> instances);
 
     void baseDelete(DevopsDeployRecordDTO devopsDeployRecordDTO);
 
@@ -26,7 +33,14 @@ public interface DevopsDeployRecordService {
      *
      * @param envId 环境id
      */
-    void deleteManualRecordByEnv(Long envId);
+    void deleteManualAndBatchRecordByEnv(Long envId);
+
+    /**
+     * 通过部署纪录id删除关联的 `devops_deploy_record_instance`表纪录
+     *
+     * @param recordIds 部署纪录id
+     */
+    void deleteRecordInstanceByRecordIds(List<Long> recordIds);
 
 
     /**
@@ -35,4 +49,22 @@ public interface DevopsDeployRecordService {
      * @param instanceId 实例id
      */
     void deleteRelatedRecordOfInstance(Long instanceId);
+
+    /**
+     * 按时间段，统计项目每日的部署次数
+     *
+     * @param projectId
+     * @param startTime
+     * @param endTime
+     * @return
+     */
+    DeployRecordCountVO countByDate(Long projectId, Date startTime, Date endTime);
+
+    /**
+     * 根据批量部署id查询对应的实例信息
+     *
+     * @param recordId 批量部署纪录id
+     * @return 对应的实例列表
+     */
+    List<AppServiceInstanceForRecordVO> queryByBatchDeployRecordId(Long recordId);
 }

@@ -39,6 +39,7 @@
                di.status,
                di.is_usable                  isUsable,
                di.cert_id                    certId,
+               di.annotations                annotations,
                de.`name`                     envName,
                cmd.`status`                  commandStatus,
                cmd.command_type              commandType,
@@ -57,7 +58,8 @@
         FROM devops_ingress di
                  LEFT JOIN devops_env de on de.id = di.env_id
                  LEFT JOIN devops_env_command cmd on di.command_id = cmd.id
-        WHERE di.id = #{id};
+        WHERE di.id = #{id}
+        AND de.type = 'user'
     </select>
 
     <select id="listIngressByOptions" resultType="io.choerodon.devops.infra.dto.DevopsIngressDTO">
@@ -82,6 +84,7 @@
         LEFT JOIN devops_env_command cmd on di.command_id = cmd.id
         LEFT JOIN devops_service ds on ds.id = dip.service_id
         WHERE di.project_id = #{projectId}
+        AND de.type = 'user'
         <if test="envId != null">
             AND de.id = #{envId}
         </if>

@@ -10,6 +10,8 @@ import { useEnvironmentStore } from '../stores';
 import { useModalStore } from './stores';
 import Tips from '../../../../../../components/new-tips';
 import DeployConfigForm from './deploy-config';
+import Deploy from '../../../../../deployment/modals/deploy';
+import BatchDeploy from '../../../../../deployment/modals/batch-deploy';
 
 import '../../../../../../components/dynamic-select/style/index.less';
 
@@ -17,6 +19,8 @@ const modalKey1 = Modal.key();
 const modalKey2 = Modal.key();
 const modalKey3 = Modal.key();
 const configKey = Modal.key();
+const deployKey = Modal.key();
+const batchDeployKey = Modal.key();
 
 const EnvModals = observer(() => {
   const modalStyle = useMemo(() => ({
@@ -33,53 +37,81 @@ const EnvModals = observer(() => {
     resourceStore: { getSelectedMenu: { id } },
     AppState: { currentMenuType: { id: projectId } },
     treeDs,
+    resourceStore,
+    itemTypes,
   } = useResourceStore();
+  const intlPrefixDeploy = 'c7ncd.deploy';
   const {
     envStore,
     tabs: {
       SYNC_TAB,
       ASSIGN_TAB,
+      CONFIG_TAB,
+      POLARIS_TAB,
     },
     permissionsDs,
     gitopsLogDs,
     gitopsSyncDs,
     baseInfoDs,
     configFormDs,
+    configDs,
+    polarisNumDS,
+    istSummaryDs,
   } = useEnvironmentStore();
+
+  const ModalStores = useModalStore();
+
   const {
     modalStore,
-  } = useModalStore();
+    nonePermissionDs,
+    deployStore,
+  } = ModalStores;
 
   function linkServices(data) {
     return modalStore.addService(projectId, id, data);
-  }
-
-  function addUsers(data) {
-    const record = baseInfoDs.current;
-    if (record) {
-      const objectVersionNumber = record.get('objectVersionNumber');
-      const users = {
-        projectId,
-        envId: id,
-        objectVersionNumber,
-        ...data,
-      };
-      return modalStore.addUsers(users);
-    }
-
-    return false;
   }
 
   function refresh() {
     baseInfoDs.query();
     treeDs.query();
     const tabKey = envStore.getTabKey;
-    if (tabKey === SYNC_TAB) {
-      gitopsSyncDs.query();
-      gitopsLogDs.query();
-    } else if (tabKey === ASSIGN_TAB) {
-      permissionsDs.query();
+    switch (tabKey) {
+      case SYNC_TAB:
+        gitopsSyncDs.query();
+        gitopsLogDs.query();
+        break;
+      case ASSIGN_TAB:
+        permissionsDs.query();
+        break;
+      case CONFIG_TAB:
+        configDs.query();
+        break;
+      case POLARIS_TAB:
+        loadPolaris();
+        break;
+      default:
+        break;
     }
+  }
+
+  async function loadPolaris() {
+    const res = await envStore.checkHasInstance(projectId, id);
+    if (res) {
+      polarisNumDS.query();
+      istSummaryDs.query();
+    }
+  }
+
+  function deployAfter({ envId, appServiceId, id: instanceId }) {
+    treeDs.query();
+    const parentId = `${envId}**${appServiceId}`;
+    resourceStore.setSelectedMenu({
+      id: instanceId,
+      parentId,
+      key: `${parentId}**${instanceId}`,
+      itemType: itemTypes.IST_ITEM,
+    });
+    resourceStore.setExpandedKeys([`${envId}`, `${envId}**${appServiceId}`]);
   }
 
   function openEnvDetail() {
@@ -100,7 +132,6 @@ const EnvModals = observer(() => {
   }
 
   function openLinkService() {
-    modalStore.loadServices(projectId, id);
     Modal.open({
       key: modalKey2,
       title: <Tips
@@ -116,15 +147,23 @@ const EnvModals = observer(() => {
         onOk={linkServices}
         intlPrefix={intlPrefix}
         prefixCls={prefixCls}
+        modalStores={ModalStores}
       />,
-      afterClose: () => {
-        modalStore.setServices([]);
-      },
     });
   }
 
   function openPermission() {
-    modalStore.loadUsers(projectId, id);
+    const modalPorps = {
+      dataSet: permissionsDs,
+      nonePermissionDs,
+      formatMessage,
+      store: modalStore,
+      baseDs: baseInfoDs,
+      intlPrefix,
+      prefixCls,
+      refresh,
+      projectId,
+    };
     Modal.open({
       key: modalKey3,
       title: <Tips
@@ -135,16 +174,8 @@ const EnvModals = observer(() => {
       style: modalStyle,
       className: 'c7ncd-modal-wrapper',
       children: <PermissionPage
-        store={modalStore}
-        onOk={addUsers}
-        intlPrefix={intlPrefix}
-        prefixCls={prefixCls}
-        skipPermission={baseInfoDs.current.get('skipCheckPermission')}
-        refresh={toPermissionTab}
+        {...modalPorps}
       />,
-      afterClose: () => {
-        modalStore.setUsers([]);
-      },
     });
   }
 
@@ -154,7 +185,7 @@ const EnvModals = observer(() => {
     envStore.setTabKey(ASSIGN_TAB);
     getTabKey === ASSIGN_TAB && permissionsDs.query();
   }
-  
+
   function linkToConfig() {
     const record = baseInfoDs.current;
     const url = record && record.get('gitlabUrl');
@@ -184,12 +215,58 @@ const EnvModals = observer(() => {
     });
   }
 
+  function openDeploy() {
+    Modal.open({
+      key: deployKey,
+      style: configModalStyle,
+      drawer: true,
+      title: formatMessage({ id: `${intlPrefixDeploy}.manual` }),
+      children: <Deploy
+        deployStore={deployStore}
+        refresh={deployAfter}
+        intlPrefix={intlPrefixDeploy}
+        prefixCls="c7ncd-deploy"
+        envId={id}
+      />,
+      afterClose: () => {
+        deployStore.setCertificates([]);
+        deployStore.setAppService([]);
+        deployStore.setConfigValue('');
+      },
+      okText: formatMessage({ id: 'deployment' }),
+    });
+  }
+
+  function openBatchDeploy() {
+    Modal.open({
+      key: batchDeployKey,
+      style: configModalStyle,
+      drawer: true,
+      title: formatMessage({ id: `${intlPrefixDeploy}.batch` }),
+      children: <BatchDeploy
+        deployStore={deployStore}
+        refresh={deployAfter}
+        intlPrefix={intlPrefixDeploy}
+        prefixCls="c7ncd-deploy"
+        envId={id}
+      />,
+      afterClose: () => {
+        deployStore.setCertificates([]);
+        deployStore.setAppService([]);
+        deployStore.setShareAppService([]);
+        deployStore.setConfigValue('');
+      },
+      okText: formatMessage({ id: 'deployment' }),
+    });
+  }
+
   function getButtons() {
     const record = baseInfoDs.current;
     const notReady = !record;
     const connect = record && record.get('connect');
     const configDisabled = !connect || notReady;
     return [{
+      permissions: ['choerodon.code.project.deploy.app-deployment.resource.ps.link'],
       name: formatMessage({ id: `${intlPrefix}.modal.service.link` }),
       icon: 'relate',
       handler: openLinkService,
@@ -197,14 +274,31 @@ const EnvModals = observer(() => {
       disabled: notReady,
       group: 1,
     }, {
-      disabled: configDisabled,
+      permissions: ['choerodon.code.project.deploy.app-deployment.resource.ps.deploy-config'],
+      disabled: notReady,
       name: formatMessage({ id: `${intlPrefix}.create.config` }),
       icon: 'playlist_add',
       handler: openConfigModal,
       display: true,
       group: 1,
     }, {
-      permissions: ['devops-service.devops-environment.pageEnvUserPermissions'],
+      permissions: ['choerodon.code.project.deploy.app-deployment.resource.ps.manual'],
+      disabled: configDisabled,
+      name: formatMessage({ id: `${intlPrefixDeploy}.manual` }),
+      icon: 'jsfiddle',
+      handler: openDeploy,
+      display: true,
+      group: 1,
+    }, {
+      permissions: ['choerodon.code.project.deploy.app-deployment.resource.ps.batch'],
+      disabled: configDisabled,
+      name: formatMessage({ id: `${intlPrefixDeploy}.batch` }),
+      icon: 'jsfiddle',
+      handler: openBatchDeploy,
+      display: true,
+      group: 1,
+    }, {
+      permissions: ['choerodon.code.project.deploy.app-deployment.resource.ps.permission'],
       name: formatMessage({ id: `${intlPrefix}.modal.permission` }),
       icon: 'authority',
       handler: openPermission,

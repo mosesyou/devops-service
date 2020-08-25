@@ -20,12 +20,14 @@ export default ({ formatMessage, intlPrefix, projectId, envId }) => ({
     }),
   },
   fields: [
-    { name: 'id', type: 'number' },
+    { name: 'id', type: 'string' },
     { name: 'name', type: 'string', label: formatMessage({ id: `${intlPrefix}.application.net.ingress` }) },
     { name: 'error', type: 'string' },
     { name: 'commandStatus', type: 'string' },
     { name: 'domain', type: 'string', label: formatMessage({ id: 'address' }) },
     { name: 'pathList', type: 'object', label: formatMessage({ id: 'path' }) },
   ],
-  queryFields: [],
+  queryFields: [
+    { name: 'name', type: 'string', label: formatMessage({ id: `${intlPrefix}.application.net.ingress` }) },
+  ],
 });

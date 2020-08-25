@@ -1,22 +1,17 @@
 import React, { Component } from 'react';
 import { injectIntl } from 'react-intl';
+import { observer } from 'mobx-react-lite';
 import { withRouter } from 'react-router-dom';
 import { Spin } from 'choerodon-ui';
 import ReactEcharts from 'echarts-for-react';
 import _ from 'lodash';
-import ReportsStore from '../stores';
 import '../../code-manager/contents/ciPipelineManage/index.less';
 import { getAxis } from '../util';
 
-class BuildTable extends Component {
-  constructor(props, context) {
-    super(props, context);
-    this.state = {
-    };
-  }
+const BuildTable = withRouter(injectIntl(observer((props) => {
+  const { intl: { formatMessage }, top, bottom, languageType, ReportsStore, echartsLoading, height } = props;
 
-  getOption() {
-    const { intl: { formatMessage }, top, bottom, languageType } = this.props;
+  function getOption() {
     const { createDates, pipelineFrequencys, pipelineSuccessFrequency, pipelineFailFrequency } = ReportsStore.getBuildNumber;
     const val = [{ name: `${formatMessage({ id: `${languageType}.build-number.fail` })}` }, { name: `${formatMessage({ id: `${languageType}.build-number.success` })}` }, { name: `${formatMessage({ id: `${languageType}.build-number.total` })}` }];
     val[0].value = _.reduce(pipelineFailFrequency, (sum, n) => sum + n, 0);
@@ -31,15 +26,11 @@ class BuildTable extends Component {
         axisPointer: {
           type: 'none',
         },
-        backgroundColor: '#fff',
+        backgroundColor: 'rgba(0,0,0,0.75)',
         textStyle: {
-          color: '#000',
-          fontSize: 13,
-          lineHeight: 20,
+          color: '#fff',
         },
-        padding: [10, 15],
-        extraCssText:
-          'box-shadow: 0 2px 4px 0 rgba(0, 0, 0, 0.2); border: 1px solid #ddd; border-radius: 0;',
+        extraCssText: '0px 2px 8px 0px rgba(0,0,0,0.12);padding:15px 17px',
         formatter(params) {
           if (params[0].value || params[1].value) {
             const total = params[0].value + params[1].value;
@@ -179,14 +170,11 @@ class BuildTable extends Component {
     };
   }
 
-  render() {
-    const { echartsLoading, height } = this.props;
-    return (
-      <Spin spinning={echartsLoading}>
-        <ReactEcharts style={{ height }} option={this.getOption()} />
-      </Spin>
-    );
-  }
-}
+  return (
+    <Spin spinning={echartsLoading}>
+      <ReactEcharts style={{ height }} option={getOption()} />
+    </Spin>
+  );
+})));
 
-export default withRouter(injectIntl(BuildTable));
+export default BuildTable;

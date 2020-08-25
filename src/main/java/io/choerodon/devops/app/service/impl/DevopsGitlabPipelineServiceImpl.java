@@ -9,20 +9,20 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 import com.alibaba.fastjson.JSONArray;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.github.pagehelper.PageHelper;
-import com.github.pagehelper.PageInfo;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 
 import io.choerodon.asgard.saga.annotation.Saga;
 import io.choerodon.asgard.saga.producer.StartSagaBuilder;
 import io.choerodon.asgard.saga.producer.TransactionalProducer;
-import io.choerodon.base.domain.PageRequest;
+import io.choerodon.core.domain.Page;
 import io.choerodon.core.exception.CommonException;
+import io.choerodon.core.iam.ResourceLevel;
 import io.choerodon.devops.api.vo.*;
 import io.choerodon.devops.api.vo.kubernetes.Stage;
 import io.choerodon.devops.app.service.*;
@@ -30,20 +30,27 @@ import io.choerodon.devops.infra.dto.*;
 import io.choerodon.devops.infra.dto.gitlab.CommitStatusDTO;
 import io.choerodon.devops.infra.dto.gitlab.JobDTO;
 import io.choerodon.devops.infra.dto.iam.IamUserDTO;
-import io.choerodon.devops.infra.dto.iam.OrganizationDTO;
 import io.choerodon.devops.infra.dto.iam.ProjectDTO;
+import io.choerodon.devops.infra.dto.iam.Tenant;
+import io.choerodon.devops.infra.enums.AppServiceEvent;
+import io.choerodon.devops.infra.enums.PipelineStatus;
+import io.choerodon.devops.infra.exception.GitlabAccessInvalidException;
 import io.choerodon.devops.infra.feign.operator.BaseServiceClientOperator;
 import io.choerodon.devops.infra.feign.operator.GitlabServiceClientOperator;
 import io.choerodon.devops.infra.mapper.DevopsGitlabPipelineMapper;
+import io.choerodon.devops.infra.util.CustomContextUtil;
+import io.choerodon.devops.infra.util.JsonHelper;
 import io.choerodon.devops.infra.util.PageRequestUtil;
 import io.choerodon.devops.infra.util.TypeUtil;
+import io.choerodon.mybatis.pagehelper.PageHelper;
+import io.choerodon.mybatis.pagehelper.domain.PageRequest;
 
 @Service
 public class DevopsGitlabPipelineServiceImpl implements DevopsGitlabPipelineService {
+    private static final Logger LOGGER = LoggerFactory.getLogger(DevopsGitlabPipelineServiceImpl.class);
 
     private static final Integer ADMIN = 1;
     private static final String SONARQUBE = "sonarqube";
-    private ObjectMapper objectMapper = new ObjectMapper();
     @Value("${services.gitlab.url}")
     private String gitlabUrl;
 
@@ -64,7 +71,10 @@ public class DevopsGitlabPipelineServiceImpl implements DevopsGitlabPipelineServ
     @Autowired
     private TransactionalProducer transactionalProducer;
     @Autowired
-    private DevopsProjectService devopsProjectService;
+    @Lazy
+    private SendNotificationService sendNotificationService;
+    @Autowired
+    private CheckGitlabAccessLevelService checkGitlabAccessLevelService;
 
 
     @Override
@@ -72,19 +82,17 @@ public class DevopsGitlabPipelineServiceImpl implements DevopsGitlabPipelineServ
     public void create(PipelineWebHookVO pipelineWebHookVO, String token) {
         pipelineWebHookVO.setToken(token);
         AppServiceDTO applicationDTO = applicationService.baseQueryByToken(token);
-        try {
-            String input = objectMapper.writeValueAsString(pipelineWebHookVO);
-            transactionalProducer.apply(
-                    StartSagaBuilder.newBuilder()
-                            .withRefType("app")
-                            .withRefId(applicationDTO.getId().toString())
-                            .withSagaCode(DEVOPS_GITLAB_PIPELINE)
-                            .withJson(input),
-                    builder -> {
-                    });
-        } catch (JsonProcessingException e) {
-            throw new CommonException(e.getMessage(), e);
-        }
+        String input = JsonHelper.marshalByJackson(pipelineWebHookVO);
+        transactionalProducer.apply(
+                StartSagaBuilder.newBuilder()
+                        .withRefType("app")
+                        .withRefId(applicationDTO.getId().toString())
+                        .withSagaCode(DEVOPS_GITLAB_PIPELINE)
+                        .withLevel(ResourceLevel.PROJECT)
+                        .withSourceId(applicationDTO.getProjectId())
+                        .withJson(input),
+                builder -> {
+                });
     }
 
     @Override
@@ -98,6 +106,10 @@ public class DevopsGitlabPipelineServiceImpl implements DevopsGitlabPipelineServ
         UserAttrDTO userAttrE = userAttrService.baseQueryByGitlabUserName(pipelineWebHookVO.getUser().getUsername());
         if (userAttrE != null) {
             gitlabUserId = TypeUtil.objToInteger(userAttrE.getGitlabUserId());
+            // 这里不设置用户上下文会报错
+            CustomContextUtil.setDefaultIfNull(userAttrE.getIamUserId());
+        } else {
+            CustomContextUtil.setDefault();
         }
         //查询pipeline最新阶段信息
         List<Stage> stages = new ArrayList<>();
@@ -159,6 +171,15 @@ public class DevopsGitlabPipelineServiceImpl implements DevopsGitlabPipelineServ
             }
             baseUpdate(devopsGitlabPipelineDTO);
         }
+
+        // 发送流水线失败的通知
+        if (PipelineStatus.FAILED.toValue().equals(pipelineWebHookVO.getObjectAttributes().getStatus())) {
+            sendNotificationService.sendWhenCDFailure(pipelineWebHookVO.getObjectAttributes().getId(), applicationDTO, pipelineWebHookVO.getUser().getUsername());
+        }
+        //成功以后也要发送webhook json
+        if (PipelineStatus.SUCCESS.toValue().equals(pipelineWebHookVO.getObjectAttributes().getStatus())) {
+            sendNotificationService.sendWhenCDSuccess(applicationDTO, pipelineWebHookVO.getUser().getUsername());
+        }
     }
 
 
@@ -181,15 +202,24 @@ public class DevopsGitlabPipelineServiceImpl implements DevopsGitlabPipelineServ
     public void updateStages(JobWebHookVO jobWebHookVO) {
         //按照job的状态实时更新pipeline阶段的状态
         DevopsGitlabCommitDTO devopsGitlabCommitDTO = devopsGitlabCommitService.baseQueryByShaAndRef(jobWebHookVO.getSha(), jobWebHookVO.getRef());
+
+        if (jobWebHookVO.getCommit() == null || jobWebHookVO.getCommit().getId() == null) {
+            LOGGER.info("The commit attribute or the commit.id attribute is null of jobWebHook {}", jobWebHookVO.getBuildName());
+            return;
+        }
+
         if (devopsGitlabCommitDTO != null && !"created".equals(jobWebHookVO.getBuildStatus())) {
-            DevopsGitlabPipelineDTO devopsGitlabPipelineDTO = baseQueryByCommitId(devopsGitlabCommitDTO.getId());
+            DevopsGitlabPipelineDTO devopsGitlabPipelineDTO = baseQueryByGitlabPipelineId(jobWebHookVO.getCommit().getId());
             if (devopsGitlabPipelineDTO != null) {
+                LOGGER.debug("Found gitlab pipeline by id {}", jobWebHookVO.getCommit().getId());
                 List<Stage> stages = JSONArray.parseArray(devopsGitlabPipelineDTO.getStage(), Stage.class);
                 stages.stream().filter(stage -> jobWebHookVO.getBuildName().equals(stage.getName())).forEach(stage ->
                         stage.setStatus(jobWebHookVO.getBuildStatus())
                 );
                 devopsGitlabPipelineDTO.setStage(JSONArray.toJSONString(stages));
                 baseUpdate(devopsGitlabPipelineDTO);
+            } else {
+                LOGGER.debug("Not Found gitlab pipeline by id {}", jobWebHookVO.getCommit().getId());
             }
         }
     }
@@ -282,45 +312,48 @@ public class DevopsGitlabPipelineServiceImpl implements DevopsGitlabPipelineServ
     }
 
     @Override
-    public PageInfo<DevopsGitlabPipelineVO> pageByOptions(Long appServiceId, String branch, PageRequest pageRequest, Date startTime, Date endTime) {
+    public Page<DevopsGitlabPipelineVO> pageByOptions(Long appServiceId, String branch, PageRequest pageable, Date startTime, Date endTime) {
+        AppServiceDTO appServiceDTO = applicationService.baseQuery(appServiceId);
         if (appServiceId == null) {
-            return new PageInfo<>();
+            return new Page<>();
         }
-        PageInfo<DevopsGitlabPipelineVO> pageDevopsGitlabPipelineDTOS = new PageInfo<>();
+        Page<DevopsGitlabPipelineVO> pageDevopsGitlabPipelineDTOS = new Page<>();
         List<DevopsGitlabPipelineVO> devopsGiltabPipelineDTOS = new ArrayList<>();
-        PageInfo<DevopsGitlabPipelineDTO> devopsGitlabPipelineDOS = new PageInfo<>();
+        Page<DevopsGitlabPipelineDTO> devopsGitlabPipelineDOS = new Page<>();
         if (branch == null) {
-            devopsGitlabPipelineDOS = basePageByApplicationId(appServiceId, pageRequest, startTime, endTime);
+            devopsGitlabPipelineDOS = basePageByApplicationId(appServiceId, pageable, startTime, endTime);
         } else {
-            devopsGitlabPipelineDOS.setList(baseListByAppIdAndBranch(appServiceId, branch));
+            devopsGitlabPipelineDOS.setContent(baseListByAppIdAndBranch(appServiceId, branch));
         }
         BeanUtils.copyProperties(devopsGitlabPipelineDOS, pageDevopsGitlabPipelineDTOS);
 
         //按照ref分组
-        Map<String, List<DevopsGitlabPipelineDTO>> refWithPipelines = devopsGitlabPipelineDOS.getList().stream()
+        Map<String, List<DevopsGitlabPipelineDTO>> refWithPipelines = devopsGitlabPipelineDOS.getContent().stream()
                 .filter(pageDevopsGitlabPipelineDTO -> pageDevopsGitlabPipelineDTO.getRef() != null)
                 .collect(Collectors.groupingBy(DevopsGitlabPipelineDTO::getRef));
         Map<String, Long> refWithPipelineIds = new HashMap<>();
 
         //获取每个分支上最新的一条pipeline记录，用于后续标记latest
         refWithPipelines.forEach((key, value) -> {
-            Long pipeLineId = Collections.max(value.stream().map(DevopsGitlabPipelineDTO::getPipelineId).collect(Collectors.toList()));
-            refWithPipelineIds.put(key, pipeLineId);
+            //找出每个分支最新的pipline
+            DevopsGitlabPipelineDTO devopsGitlabPipelineDTO = devopsGitlabPipelineMapper.selectLatestPipline(appServiceId, key);
+            List<Long> ids = value.stream().map(DevopsGitlabPipelineDTO::getPipelineId).collect(Collectors.toList());
+            if (ids.contains(devopsGitlabPipelineDTO.getPipelineId())) {
+                refWithPipelineIds.put(key, devopsGitlabPipelineDTO.getPipelineId());
+            }
         });
-
-        AppServiceDTO appServiceDTO = applicationService.baseQuery(appServiceId);
         ProjectDTO projectDTO = baseServiceClientOperator.queryIamProjectById(appServiceDTO.getProjectId());
-        OrganizationDTO organization = baseServiceClientOperator.queryOrganizationById(projectDTO.getOrganizationId());
+        Tenant organization = baseServiceClientOperator.queryOrganizationById(projectDTO.getOrganizationId());
 
         //获取pipeline记录
         Set<Long> userIds = new HashSet<>();
-        devopsGitlabPipelineDOS.getList().forEach(devopsGitlabPipelineDO -> {
+        devopsGitlabPipelineDOS.getContent().forEach(devopsGitlabPipelineDO -> {
             userIds.add(devopsGitlabPipelineDO.getCommitUserId());
             userIds.add(devopsGitlabPipelineDO.getPipelineCreateUserId());
         });
 
         List<IamUserDTO> userES = baseServiceClientOperator.listUsersByIds(new ArrayList<>(userIds));
-        devopsGitlabPipelineDOS.getList().forEach(devopsGitlabPipelineDO -> {
+        devopsGitlabPipelineDOS.getContent().forEach(devopsGitlabPipelineDO -> {
             DevopsGitlabPipelineVO devopsGitlabPipelineDTO = new DevopsGitlabPipelineVO();
             if (devopsGitlabPipelineDO.getPipelineId().equals(refWithPipelineIds.get(devopsGitlabPipelineDO.getRef()))) {
                 devopsGitlabPipelineDTO.setLatest(true);
@@ -351,10 +384,7 @@ public class DevopsGitlabPipelineServiceImpl implements DevopsGitlabPipelineServ
             }
 
             devopsGitlabPipelineDTO.setRef(devopsGitlabPipelineDO.getRef());
-            String version = appServiceVersionService.baseQueryByPipelineId(devopsGitlabPipelineDO.getPipelineId(), devopsGitlabPipelineDO.getRef(), appServiceId);
-            if (version != null) {
-                devopsGitlabPipelineDTO.setVersion(version);
-            }
+            devopsGitlabPipelineDTO.setVersion(appServiceVersionService.baseQueryByPipelineId(devopsGitlabPipelineDTO.getPipelineId(), devopsGitlabPipelineDTO.getRef(), appServiceId));
 
             //pipeline阶段信息
             List<Stage> stages = JSONArray.parseArray(devopsGitlabPipelineDO.getStage(), Stage.class);
@@ -363,12 +393,12 @@ public class DevopsGitlabPipelineServiceImpl implements DevopsGitlabPipelineServ
             }
             devopsGitlabPipelineDTO.setStages(stages);
             devopsGitlabPipelineDTO.setGitlabUrl(gitlabUrl + "/"
-                    + organization.getCode() + "-" + projectDTO.getCode() + "/"
+                    + organization.getTenantNum() + "-" + projectDTO.getCode() + "/"
                     + appServiceDTO.getCode() + ".git");
             devopsGiltabPipelineDTOS.add(devopsGitlabPipelineDTO);
         });
 
-        pageDevopsGitlabPipelineDTOS.setList(devopsGiltabPipelineDTOS);
+        pageDevopsGitlabPipelineDTOS.setContent(devopsGiltabPipelineDTOS);
         return pageDevopsGitlabPipelineDTOS;
     }
 
@@ -388,7 +418,7 @@ public class DevopsGitlabPipelineServiceImpl implements DevopsGitlabPipelineServ
     @Override
     public DevopsGitlabPipelineDTO baseQueryByGitlabPipelineId(Long id) {
         DevopsGitlabPipelineDTO devopsGitlabPipelineDTO = new DevopsGitlabPipelineDTO();
-        devopsGitlabPipelineDTO.setPipelineId(id);
+        devopsGitlabPipelineDTO.setPipelineId(Objects.requireNonNull(id));
         return devopsGitlabPipelineMapper.selectOne(devopsGitlabPipelineDTO);
     }
 
@@ -414,8 +444,8 @@ public class DevopsGitlabPipelineServiceImpl implements DevopsGitlabPipelineServ
 
 
     @Override
-    public PageInfo<DevopsGitlabPipelineDTO> basePageByApplicationId(Long appServiceId, PageRequest pageRequest, Date startTime, Date endTime) {
-        return PageHelper.startPage(pageRequest.getPage(), pageRequest.getSize(), PageRequestUtil.getOrderBy(pageRequest)).doSelectPageInfo(() ->
+    public Page<DevopsGitlabPipelineDTO> basePageByApplicationId(Long appServiceId, PageRequest pageable, Date startTime, Date endTime) {
+        return PageHelper.doPageAndSort(PageRequestUtil.simpleConvertSortForPage(pageable), () ->
                 devopsGitlabPipelineMapper.listDevopsGitlabPipeline(appServiceId, startTime == null ? null : new java.sql.Date(startTime.getTime()), endTime == null ? null : new java.sql.Date(endTime.getTime())));
     }
 

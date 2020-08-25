@@ -4,15 +4,23 @@ import javax.persistence.Id;
 import javax.persistence.Table;
 import javax.validation.constraints.NotNull;
 
-import io.choerodon.mybatis.entity.BaseDTO;
+import io.swagger.annotations.ApiModelProperty;
+
+import io.choerodon.mybatis.annotation.ModifyAudit;
+import io.choerodon.mybatis.annotation.VersionAudit;
+import io.choerodon.mybatis.domain.AuditDomain;
 
 /**
  * Created by zzy on 2018/3/26.
  */
+@ModifyAudit
+@VersionAudit
 @Table(name = "devops_user")
-public class UserAttrDTO extends BaseDTO {
+public class UserAttrDTO extends AuditDomain {
+    public static final String ENCRYPT_KEY = "devops_user";
 
     @Id
+//    @Encrypt(UserAttrDTO.ENCRYPT_KEY)
     private Long iamUserId;
 
     @NotNull
@@ -21,6 +29,9 @@ public class UserAttrDTO extends BaseDTO {
     private String gitlabToken;
 
     private String gitlabUserName;
+
+    @ApiModelProperty("用户是否是gitlab的admin")
+    private Boolean isGitlabAdmin;
 
     public Long getIamUserId() {
         return iamUserId;
@@ -52,5 +63,24 @@ public class UserAttrDTO extends BaseDTO {
 
     public void setGitlabUserName(String gitlabUserName) {
         this.gitlabUserName = gitlabUserName;
+    }
+
+    public Boolean getGitlabAdmin() {
+        return isGitlabAdmin;
+    }
+
+    public void setGitlabAdmin(Boolean gitlabAdmin) {
+        isGitlabAdmin = gitlabAdmin;
+    }
+
+    @Override
+    public String toString() {
+        return "UserAttrDTO{" +
+                "iamUserId=" + iamUserId +
+                ", gitlabUserId=" + gitlabUserId +
+                ", gitlabToken='" + gitlabToken + '\'' +
+                ", gitlabUserName='" + gitlabUserName + '\'' +
+                ", isGitlabAdmin=" + isGitlabAdmin +
+                '}';
     }
 }

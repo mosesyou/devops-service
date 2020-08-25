@@ -1,36 +1,32 @@
 package io.choerodon.devops.infra.feign.operator;
 
-import static io.choerodon.core.iam.InitRoleCode.PROJECT_MEMBER;
-import static io.choerodon.core.iam.InitRoleCode.PROJECT_OWNER;
-
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Set;
-import java.util.stream.Collectors;
-import javax.annotation.Nonnull;
-import javax.annotation.Nullable;
-
-import com.github.pagehelper.PageInfo;
+import com.alibaba.fastjson.JSONObject;
 import com.google.gson.Gson;
+import io.choerodon.core.domain.Page;
+import io.choerodon.core.exception.CommonException;
+import io.choerodon.core.exception.FeignException;
+import io.choerodon.devops.api.vo.OrgAdministratorVO;
+import io.choerodon.devops.api.vo.ResourceLimitVO;
+import io.choerodon.devops.api.vo.RoleAssignmentSearchVO;
+import io.choerodon.devops.infra.dto.iam.*;
+import io.choerodon.devops.infra.enums.LabelType;
+import io.choerodon.devops.infra.feign.BaseServiceClient;
+import io.choerodon.devops.infra.util.FeignParamUtils;
+import io.choerodon.devops.infra.util.TypeUtil;
+import io.choerodon.mybatis.pagehelper.domain.PageRequest;
+import io.choerodon.mybatis.pagehelper.domain.Sort;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
+import org.springframework.util.CollectionUtils;
+import org.springframework.util.StringUtils;
 
-import io.choerodon.base.domain.PageRequest;
-import io.choerodon.core.exception.CommonException;
-import io.choerodon.core.exception.ExceptionResponse;
-import io.choerodon.core.exception.FeignException;
-import io.choerodon.devops.api.vo.OrganizationSimplifyVO;
-import io.choerodon.devops.api.vo.RoleAssignmentSearchVO;
-import io.choerodon.devops.api.vo.iam.*;
-import io.choerodon.devops.api.vo.kubernetes.ProjectCreateDTO;
-import io.choerodon.devops.infra.dto.iam.*;
-import io.choerodon.devops.infra.enums.OrgPublishMarketStatus;
-import io.choerodon.devops.infra.feign.BaseServiceClient;
-import io.choerodon.devops.infra.util.FeignParamUtils;
+import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
+import java.util.*;
+import java.util.stream.Collectors;
 
 /**
  * Created by Sheep on 2019/7/11.
@@ -42,24 +38,69 @@ public class BaseServiceClientOperator {
     private static final Logger LOGGER = LoggerFactory.getLogger(BaseServiceClientOperator.class);
     private static final Gson gson = new Gson();
 
+    private static final String LOGIN_NAME = "loginName";
+    private static final String REAL_NAME = "realName";
+
 
     @Autowired
     private BaseServiceClient baseServiceClient;
 
-    public ProjectDTO queryIamProjectById(Long projectId) {
-        ResponseEntity<ProjectDTO> projectDTOResponseEntity = baseServiceClient.queryIamProject(projectId);
-        if (!projectDTOResponseEntity.getStatusCode().is2xxSuccessful()) {
-            throw new CommonException("error.project.query.by.id", projectId);
+    /**
+     * @param organizationId 组织id
+     * @param code           角色标签
+     * @return 角色id
+     */
+    public Long getRoleId(Long organizationId, String code, String labelName) {
+        ResponseEntity<List<RoleDTO>> roleResponseEntity = baseServiceClient.getRoleByCode(organizationId, code, labelName);
+        List<RoleDTO> roleDTOList = roleResponseEntity.getBody();
+        if (roleResponseEntity.getStatusCode().is2xxSuccessful() && roleDTOList != null && roleDTOList.size() != 0) {
+            return roleDTOList.get(0).getId();
+        } else {
+            throw new CommonException("error.organization.role.id.get", code);
         }
-        return projectDTOResponseEntity.getBody();
     }
 
-    public OrganizationDTO queryOrganizationById(Long organizationId) {
-        ResponseEntity<OrganizationDTO> organizationDTOResponseEntity = baseServiceClient.queryOrganizationById(organizationId);
+    public ProjectDTO queryIamProjectById(Long projectId) {
+        return queryIamProjectById(projectId, true, true, true);
+    }
+
+    public ProjectDTO queryIamProjectById(Long projectId, Boolean withCategory, Boolean withUserInfo, Boolean withAgileInfo) {
+        ResponseEntity<ProjectDTO> projectDTOResponseEntity = baseServiceClient.queryIamProject(Objects.requireNonNull(projectId), withCategory, withUserInfo, withAgileInfo);
+        ProjectDTO projectDTO = projectDTOResponseEntity.getBody();
+        // 判断id是否为空是因为可能会返回 CommonException 但是也会被反序列化为  ProjectDTO
+        if (projectDTO == null || projectDTO.getId() == null) {
+            throw new CommonException("error.project.query.by.id", projectId);
+        }
+        return projectDTO;
+    }
+
+    public Tenant queryOrganizationById(Long organizationId) {
+        return queryOrganizationById(organizationId, true);
+    }
+
+    public Tenant queryOrganizationById(Long organizationId, Boolean withMoreInfo) {
+        ResponseEntity<Tenant> organizationDTOResponseEntity = baseServiceClient.queryOrganizationById(organizationId, withMoreInfo);
+        if (organizationDTOResponseEntity.getStatusCode().is2xxSuccessful()) {
+            Tenant tenant = organizationDTOResponseEntity.getBody();
+            if (tenant != null && tenant.getTenantId() != null) {
+                return tenant;
+            }
+            if (LOGGER.isInfoEnabled()) {
+                LOGGER.info("queryOrganizationById: unexpected result: {}", JSONObject.toJSONString(tenant));
+            }
+        }
+        throw new CommonException("error.organization.get", organizationId);
+    }
+
+    public List<Tenant> listOrganizationByIds(Set<Long> organizationIds) {
+        if (CollectionUtils.isEmpty(organizationIds)) {
+            return Collections.emptyList();
+        }
+        ResponseEntity<List<Tenant>> organizationDTOResponseEntity = baseServiceClient.queryOrgByIds(organizationIds);
         if (organizationDTOResponseEntity.getStatusCode().is2xxSuccessful()) {
             return organizationDTOResponseEntity.getBody();
         } else {
-            throw new CommonException("error.organization.get");
+            throw new CommonException("error.organization.get", organizationIds.toString());
         }
     }
 
@@ -67,47 +108,27 @@ public class BaseServiceClientOperator {
         return listIamProjectByOrgId(organizationId, null, null, null);
     }
 
-
-    public List<ProjectDTO> listIamProjectByOrgId(Long organizationId, String name, String code, String params) {
-        PageRequest pageRequest = new PageRequest(0, 0);
-        ResponseEntity<PageInfo<ProjectDTO>> pageResponseEntity =
-                baseServiceClient.pageProjectsByOrgId(organizationId, FeignParamUtils.encodePageRequest(pageRequest), name, code, true, params);
-        return pageResponseEntity.getBody().getList();
+    public List<ProjectDTO> listOwnedProjects(Long organizationId, Long userId) {
+        return baseServiceClient.listOwnedProjects(organizationId, userId).getBody();
     }
 
-    public PageInfo<ProjectDTO> pageProjectByOrgId(Long organizationId, int page, int size, String name, String code, String params) {
-        PageRequest pageRequest = new PageRequest(page, size);
+
+    public List<ProjectDTO> listIamProjectByOrgId(Long organizationId, String name, String code, String params) {
+        PageRequest customPageRequest = new PageRequest(0, 0);
+        ResponseEntity<Page<ProjectDTO>> pageResponseEntity =
+                baseServiceClient.pageProjectsByOrgId(organizationId, FeignParamUtils.encodePageRequest(customPageRequest), name, code, true, params);
+        return Objects.requireNonNull(pageResponseEntity.getBody()).getContent();
+    }
+
+    public Page<ProjectDTO> pageProjectByOrgId(Long organizationId, int page, int size, Sort sort, String name, String code, String params) {
+        PageRequest pageable = new PageRequest(page, size, sort);
         try {
-            ResponseEntity<PageInfo<ProjectDTO>> pageInfoResponseEntity = baseServiceClient.pageProjectsByOrgId(organizationId,
-                    FeignParamUtils.encodePageRequest(pageRequest), name, code, true, params);
+            ResponseEntity<Page<ProjectDTO>> pageInfoResponseEntity = baseServiceClient.pageProjectsByOrgId(organizationId,
+                    FeignParamUtils.encodePageRequest(pageable), name, code, true, params);
             return pageInfoResponseEntity.getBody();
         } catch (FeignException e) {
             throw new CommonException(e);
         }
-    }
-
-    public List<ApplicationDTO> listAppsByOrgId(Long orgId, String name) {
-        ResponseEntity<List<ApplicationDTO>> apps;
-        try {
-            apps = baseServiceClient.queryAppsByOrgId(orgId, false, 1, 0, name, null, null, null);
-        } catch (Exception e) {
-            throw new CommonException(e);
-        }
-        return apps.getBody();
-    }
-
-    public List<ProjectWithRoleVO> listProjectWithRoleDTO(Long userId) {
-        List<ProjectWithRoleVO> returnList = new ArrayList<>();
-        int page = 0;
-        // TODO 此处的分页参数，在以后需要改为0，然后通知iam框架组修改接口，处理size=0的情况
-        int size = 10000;
-        ResponseEntity<PageInfo<ProjectWithRoleVO>> pageResponseEntity =
-                baseServiceClient.listProjectWithRole(userId, page, size);
-        PageInfo<ProjectWithRoleVO> projectWithRoleDTOPage = pageResponseEntity.getBody();
-        if (!projectWithRoleDTOPage.getList().isEmpty()) {
-            returnList.addAll(projectWithRoleDTOPage.getList());
-        }
-        return returnList;
     }
 
     public List<IamUserDTO> listUsersByIds(List<Long> ids) {
@@ -117,7 +138,9 @@ public class BaseServiceClientOperator {
             try {
                 userDTOS = baseServiceClient
                         .listUsersByIds(ids.toArray(newIds), false).getBody();
-
+                if (userDTOS == null) {
+                    userDTOS = Collections.emptyList();
+                }
             } catch (Exception e) {
                 throw new CommonException("error.users.get", e);
             }
@@ -127,6 +150,9 @@ public class BaseServiceClientOperator {
 
     public IamUserDTO queryUserByUserId(Long id) {
         List<Long> ids = new ArrayList<>();
+        if (id == null) {
+            return null;
+        }
         ids.add(id);
         List<IamUserDTO> userES = this.listUsersByIds(ids);
         if (userES != null && !userES.isEmpty()) {
@@ -135,89 +161,85 @@ public class BaseServiceClientOperator {
         return null;
     }
 
-    public PageInfo<IamUserDTO> pagingQueryUsersByRoleIdOnProjectLevel(PageRequest pageRequest,
-                                                                       RoleAssignmentSearchVO roleAssignmentSearchVO,
-                                                                       Long roleId, Long projectId, Boolean doPage) {
-        try {
-            return baseServiceClient
-                    .pagingQueryUsersByRoleIdOnProjectLevel(pageRequest.getPage(), pageRequest.getSize(), roleId,
-                            projectId, doPage, roleAssignmentSearchVO).getBody();
-        } catch (FeignException e) {
-            LOGGER.error("get users by role id {} and project id {} error", roleId, projectId);
-        }
-        return null;
+    public List<IamUserDTO> queryUsersByUserIds(List<Long> ids) {
+        return this.listUsersByIds(ids);
     }
 
-    public PageInfo<UserWithRoleVO> queryUserPermissionByProjectId(Long projectId, PageRequest pageRequest,
-                                                                   Boolean doPage) {
+    public List<IamUserDTO> listUsersWithGitlabLabel(Long projectId,
+                                                     RoleAssignmentSearchVO roleAssignmentSearchVO,
+                                                     String labelName) {
         try {
-            RoleAssignmentSearchVO roleAssignmentSearchVO = new RoleAssignmentSearchVO();
-            ResponseEntity<PageInfo<UserWithRoleVO>> userEPageResponseEntity = baseServiceClient
-                    .queryUserByProjectId(projectId,
-                            pageRequest.getPage(), pageRequest.getSize(), doPage, roleAssignmentSearchVO);
-            return userEPageResponseEntity.getBody();
+            return baseServiceClient
+                    .listUsersWithGitlabLabel(projectId, roleAssignmentSearchVO, labelName).getBody();
         } catch (FeignException e) {
-            LOGGER.error("get user permission by project id {} error", projectId);
-            return null;
+            throw new CommonException("error.user.get.byGitlabLabel");
         }
     }
 
     public IamUserDTO queryByEmail(Long projectId, String email) {
         try {
-            ResponseEntity<PageInfo<IamUserDTO>> userDOResponseEntity = baseServiceClient
+            ResponseEntity<Page<IamUserDTO>> userDOResponseEntity = baseServiceClient
                     .listUsersByEmail(projectId, 0, 0, email);
-            if (userDOResponseEntity.getBody().getList().isEmpty()) {
+            if (userDOResponseEntity.getBody().getContent().isEmpty()) {
                 return null;
             }
-            return userDOResponseEntity.getBody().getList().get(0);
+            return userDOResponseEntity.getBody().getContent().get(0);
         } catch (FeignException e) {
             LOGGER.error("get user by email {} error", email);
             return null;
         }
     }
 
-    public Long queryRoleIdByCode(String roleCode) {
-        try {
-
-            return baseServiceClient.queryRoleIdByCode(roleCode).getBody().getList().get(0).getId();
-        } catch (FeignException e) {
-            LOGGER.error("get role id by code {} error", roleCode);
-            return null;
-        }
-    }
-
     public List<Long> getAllMemberIdsWithoutOwner(Long projectId) {
-        // 获取项目成员id
-        Long memberId = this.queryRoleIdByCode(PROJECT_MEMBER);
-        // 获取项目所有者id
-        Long ownerId = this.queryRoleIdByCode(PROJECT_OWNER);
         // 项目下所有项目成员
         List<Long> memberIds =
-
-                this.pagingQueryUsersByRoleIdOnProjectLevel(new PageRequest(0, 0), new RoleAssignmentSearchVO(), memberId,
-                        projectId, false).getList().stream().map(IamUserDTO::getId).collect(Collectors.toList());
+                this.listUsersWithGitlabLabel(projectId, new RoleAssignmentSearchVO(), LabelType.GITLAB_PROJECT_DEVELOPER.getValue())
+                        .stream().map(IamUserDTO::getId).collect(Collectors.toList());
         // 项目下所有项目所有者
         List<Long> ownerIds =
-                this.pagingQueryUsersByRoleIdOnProjectLevel(new PageRequest(0, 0), new RoleAssignmentSearchVO(), ownerId,
-
-                        projectId, false).getList().stream().map(IamUserDTO::getId).collect(Collectors.toList());
+                this.listUsersWithGitlabLabel(projectId, new RoleAssignmentSearchVO(), LabelType.GITLAB_PROJECT_OWNER.getValue())
+                        .stream().map(IamUserDTO::getId).collect(Collectors.toList());
         return memberIds.stream().filter(e -> !ownerIds.contains(e)).collect(Collectors.toList());
     }
 
-    public List<IamUserDTO> getAllMember(Long projectId) {
-        // 获取项目成员id
-        Long memberId = this.queryRoleIdByCode(PROJECT_MEMBER);
-        // 获取项目所有者id
-        Long ownerId = this.queryRoleIdByCode(PROJECT_OWNER);
+    //获得所有项目所有者id
+    public List<Long> getAllOwnerIds(Long projectId) {
+        // 项目下所有项目所有者
+        return this.listUsersWithGitlabLabel(projectId, new RoleAssignmentSearchVO(), LabelType.GITLAB_PROJECT_OWNER.getValue())
+                .stream().filter(IamUserDTO::getEnabled).map(IamUserDTO::getId).collect(Collectors.toList());
+    }
+
+    public List<IamUserDTO> getAllMember(Long projectId, String params) {
         // 项目下所有项目成员
 
-        List<IamUserDTO> list = this.pagingQueryUsersByRoleIdOnProjectLevel(new PageRequest(0, 0), new RoleAssignmentSearchVO(), memberId,
-                projectId, false).getList();
+        RoleAssignmentSearchVO roleAssignmentSearchVO = new RoleAssignmentSearchVO();
+        roleAssignmentSearchVO.setEnabled(true);
+        Map<String, Object> searchParamMap;
+        List<String> paramList;
+        // 处理搜索参数
+        if (!StringUtils.isEmpty(params)) {
+            Map maps = gson.fromJson(params, Map.class);
+            searchParamMap = TypeUtil.cast(maps.get(TypeUtil.SEARCH_PARAM));
+            paramList = TypeUtil.cast(maps.get(TypeUtil.PARAMS));
+            roleAssignmentSearchVO.setParam(paramList == null ? null : paramList.toArray(new String[0]));
+            if (searchParamMap != null) {
+                if (searchParamMap.get(LOGIN_NAME) != null) {
+                    String loginName = TypeUtil.objToString(searchParamMap.get(LOGIN_NAME));
+                    roleAssignmentSearchVO.setLoginName(loginName);
+                }
+                if (searchParamMap.get(REAL_NAME) != null) {
+                    String realName = TypeUtil.objToString(searchParamMap.get(REAL_NAME));
+                    roleAssignmentSearchVO.setRealName(realName);
+                }
+            }
+        }
+
+        // 查出项目下的所有成员
+        List<IamUserDTO> list = this.listUsersWithGitlabLabel(projectId, roleAssignmentSearchVO, LabelType.GITLAB_PROJECT_DEVELOPER.getValue());
         List<Long> memberIds = list.stream().filter(IamUserDTO::getEnabled).map(IamUserDTO::getId).collect(Collectors.toList());
         // 项目下所有项目所有者
-        this.pagingQueryUsersByRoleIdOnProjectLevel(new PageRequest(0, 0), new RoleAssignmentSearchVO(), ownerId,
-
-                projectId, false).getList().stream().filter(IamUserDTO::getEnabled).forEach(t -> {
+        this.listUsersWithGitlabLabel(projectId, roleAssignmentSearchVO, LabelType.GITLAB_PROJECT_OWNER.getValue())
+                .stream().filter(IamUserDTO::getEnabled).forEach(t -> {
             if (!memberIds.contains(t.getId())) {
                 list.add(t);
             }
@@ -225,176 +247,35 @@ public class BaseServiceClientOperator {
         return list;
     }
 
-    public Boolean isProjectOwner(Long userId, ProjectDTO projectDTO) {
-        List<ProjectWithRoleVO> projectWithRoleVOList = listProjectWithRoleDTO(userId);
-        List<RoleVO> roleVOS = new ArrayList<>();
-        projectWithRoleVOList.stream().filter(projectWithRoleDTO ->
-                projectWithRoleDTO.getName().equals(projectDTO.getName())).forEach(projectWithRoleDTO ->
-                roleVOS.addAll(projectWithRoleDTO.getRoles()
-                        .stream().filter(roleDTO -> roleDTO.getCode().equals(PROJECT_OWNER))
-                        .collect(Collectors.toList())));
-        return !roleVOS.isEmpty();
-    }
-
-    public IamAppDTO createIamApp(Long organizationId, IamAppDTO appDTO) {
-        ResponseEntity<IamAppDTO> appDTOResponseEntity = null;
+    public Boolean isGitlabProjectOwner(Long userId, Long projectId) {
+        Boolean isGitlabProjectOwner;
         try {
-            appDTOResponseEntity = baseServiceClient.createIamApplication(organizationId, appDTO);
+            isGitlabProjectOwner = baseServiceClient.checkIsGitlabProjectOwner(userId, projectId).getBody();
         } catch (FeignException e) {
             throw new CommonException(e);
         }
-        IamAppDTO result = appDTOResponseEntity.getBody();
-        if (result == null || result.getProjectId() == null) {
-            throw new CommonException("error.code.exist");
-        }
-        return result;
+        return isGitlabProjectOwner;
     }
 
-    public IamAppDTO updateIamApp(Long organizationId, Long id, IamAppDTO appDTO) {
-        ResponseEntity<IamAppDTO> appDTOResponseEntity = null;
+    public Boolean isGitLabOrgOwner(Long userId, Long projectId) {
+        Boolean isGitLabOrgOwner;
         try {
-            appDTOResponseEntity = baseServiceClient.updateIamApplication(organizationId, id, appDTO);
+            isGitLabOrgOwner = baseServiceClient.checkIsGitlabOrgOwner(userId, projectId).getBody();
         } catch (FeignException e) {
             throw new CommonException(e);
         }
-        return appDTOResponseEntity.getBody();
-    }
-
-    public IamAppDTO queryIamAppByCode(Long organizationId, String code) {
-        ResponseEntity<PageInfo<IamAppDTO>> pageInfoResponseEntity = null;
-        try {
-            pageInfoResponseEntity = baseServiceClient.getIamApplication(organizationId, code);
-        } catch (FeignException e) {
-            throw new CommonException(e);
-        }
-        return pageInfoResponseEntity.getBody().getList().isEmpty() ? null : pageInfoResponseEntity.getBody().getList().get(0);
-    }
-
-    public ProjectDTO createProject(Long organizationId, ProjectCreateDTO projectCreateDTO) {
-        try {
-            ResponseEntity<ProjectDTO> projectDTOResponseEntity = baseServiceClient
-                    .createProject(organizationId, projectCreateDTO);
-            return projectDTOResponseEntity.getBody();
-        } catch (FeignException e) {
-            LOGGER.error("error.create.iam.project");
-            return null;
-        }
-    }
-
-    public PageInfo<OrganizationSimplifyVO> getAllOrgs(Integer page, Integer size) {
-        try {
-            ResponseEntity<PageInfo<OrganizationSimplifyVO>> simplifyDTOs = baseServiceClient
-                    .getAllOrgs(page, size);
-            return simplifyDTOs.getBody();
-        } catch (FeignException e) {
-            LOGGER.error("error.get.all.organization");
-            return null;
-        }
-    }
-
-    public ProjectDTO queryProjectByAppId(Long id) {
-        try {
-            return baseServiceClient.queryProjectByAppId(id).getBody();
-        } catch (Exception e) {
-            return null;
-        }
-    }
-
-    public ApplicationDTO queryAppById(Long id) {
-        try {
-            return baseServiceClient.queryAppById(id).getBody();
-        } catch (Exception e) {
-            return null;
-        }
-    }
-
-    public List<ApplicationDTO> getAppByIds(Set<Long> ids) {
-        try {
-            return baseServiceClient.getAppByIds(ids).getBody();
-        } catch (Exception e) {
-            return null;
-        }
-    }
-
-    public void publishFail(Long projectId, Long mktAppVersionId, String code, Boolean fixFlag) {
-        try {
-            baseServiceClient.publishFail(projectId, mktAppVersionId, code, fixFlag).getBody();
-        } catch (Exception e) {
-            throw new CommonException("error.insert.failed.message", e.getMessage());
-        }
-    }
-
-    public PageInfo<ProjectDTO> pagingProjectByOptions(Long organizationId, int page, int size, String[] params) {
-        try {
-            return baseServiceClient.pagingProjectByOptions(organizationId, false, page, size, params).getBody();
-        } catch (Exception e) {
-            return null;
-        }
-    }
-
-    public void completeDownloadApplication(Long publishAppVersionId, Long appVersionId, Long organizationId, List<AppDownloadDevopsReqVO> appDownloadDevopsReqVOS) {
-        try {
-            ResponseEntity<String> responseEntity = baseServiceClient.completeDownloadApplication(publishAppVersionId, appVersionId, organizationId, appDownloadDevopsReqVOS);
-            if (responseEntity != null && responseEntity.getBody() != null) {
-                ExceptionResponse exceptionResponse = gson.fromJson(responseEntity.getBody(), ExceptionResponse.class);
-                if (exceptionResponse.getFailed()) {
-                    throw new CommonException("error.application.download.complete");
-                }
-            }
-        } catch (Exception e) {
-            throw new CommonException("error.application.download.complete", e.getMessage());
-        }
-    }
-
-    public void failToDownloadApplication(Long publishAppVersionId, Long appVersionId, Long organizationId) {
-        try {
-            ResponseEntity<String> responseEntity = baseServiceClient.failToDownloadApplication(publishAppVersionId, appVersionId, organizationId);
-            if (responseEntity != null && responseEntity.getBody() != null) {
-                ExceptionResponse exceptionResponse = gson.fromJson(responseEntity.getBody(), ExceptionResponse.class);
-                if (exceptionResponse.getFailed()) {
-                    throw new CommonException("error.application.download.failed");
-                }
-            }
-        } catch (Exception e) {
-            throw new CommonException("error.application.download.failed", e.getMessage());
-        }
-    }
-
-    public String checkLatestToken() {
-        try {
-            RemoteTokenAuthorizationVO remoteTokenAuthorizationVO = baseServiceClient.checkLatestToken().getBody();
-            if (remoteTokenAuthorizationVO != null) {
-                return remoteTokenAuthorizationVO.getRemoteToken();
-            }
-        } catch (Exception e) {
-            throw new CommonException("error.remote.token.authorization", e.getMessage());
-        }
-        return null;
+        return isGitLabOrgOwner;
     }
 
     public List<ProjectDTO> queryProjectsByIds(Set<Long> ids) {
         try {
             return baseServiceClient.queryByIds(ids).getBody();
         } catch (Exception e) {
+            // TODO 是否考虑抛异常，暂时没时间看为什么返回null
             return null;
         }
     }
 
-    public List<ApplicationDTO> listApplicationInfoByAppIds(Long projectId, Set<Long> serviceIds) {
-        try {
-            return baseServiceClient.listApplicationInfoByAppIds(projectId, serviceIds).getBody();
-        } catch (Exception e) {
-            return null;
-        }
-    }
-
-    public Set<Long> listAppServiceByAppId(Long projectId, Long appId) {
-        try {
-            return baseServiceClient.listAppServiceByAppId(projectId, appId).getBody();
-        } catch (Exception e) {
-            return null;
-        }
-    }
 
     /**
      * 根据组织id和项目code查询项目
@@ -414,53 +295,135 @@ public class BaseServiceClientOperator {
         }
     }
 
-    public List<Long> listServicesForMarket(@Nonnull Long organizationId, Boolean deployOnly) {
-        String status = deployOnly != null && deployOnly ? OrgPublishMarketStatus.DEPLOY_ONLY.getType() : OrgPublishMarketStatus.DOWNLOAD_ONLY.getType();
+    public ClientVO createClient(Long organizationId, ClientVO clientVO) {
         try {
-            ResponseEntity<Set<Long>> resp = baseServiceClient.listService(organizationId, status);
-
-            return resp == null || resp.getBody() == null ? null : new ArrayList<>(resp.getBody());
+            ClientVO client = baseServiceClient.createClient(organizationId, clientVO).getBody();
+            if (client == null || client.getId() == null) {
+                throw new CommonException("error.create.client");
+            }
+            return client;
         } catch (Exception ex) {
-            return null;
+            throw new CommonException("error.create.client");
         }
     }
 
-    public List<Long> listServiceVersionsForMarket(@Nonnull Long organizationId, Boolean deployOnly) {
-        String status = deployOnly != null && deployOnly ? OrgPublishMarketStatus.DEPLOY_ONLY.getType() : OrgPublishMarketStatus.DOWNLOAD_ONLY.getType();
+    public ClientVO queryClientByName(Long organization, String name) {
         try {
-            ResponseEntity<Set<Long>> resp = baseServiceClient.listSvcVersion(organizationId, status);
-            return resp == null || resp.getBody() == null ? null : new ArrayList<>(resp.getBody());
+            return baseServiceClient.queryClientByName(organization, name).getBody();
         } catch (Exception ex) {
-            return null;
+            throw new CommonException("error.get.client");
         }
     }
 
-    public List<IamUserDTO> listAllOrganizationOwners(Long organizationId) {
+    public void deleteClient(Long organizationId, Long clientId) {
         try {
-            ResponseEntity<PageInfo<IamUserDTO>> users = baseServiceClient.pagingQueryUsersWithRolesOnOrganizationLevel(organizationId, 0, 0, null, null, "组织管理员", true, false, null);
-            return (users == null || users.getBody() == null) ? Collections.emptyList() : users.getBody().getList();
+            baseServiceClient.deleteClient(organizationId, clientId);
         } catch (Exception ex) {
-            LOGGER.info("Exception occurred when listing organization owners of organization with id {}", organizationId);
-            return Collections.emptyList();
+            throw new CommonException("error.delete.client");
+        }
+    }
+
+    public ClientVO queryClientBySourceId(Long organizationId, Long clientId) {
+        try {
+            ResponseEntity<ClientVO> responseEntity = baseServiceClient.queryClientBySourceId(organizationId, clientId);
+            return responseEntity.getBody();
+        } catch (Exception ex) {
+            throw new CommonException("error.query.client");
         }
     }
 
     /**
-     * 项目层批量分配权限
+     * 通过登录名查询用户
+     *
+     * @param loginName 登录名
+     * @return 用户信息
      */
-    public void assignProjectOwnerForUsersInProject(
-            Long projectId,
-            Set<Long> userIds,
-            Long projectOwnerId) {
-        List<MemberRoleDTO> memberRoleDTOS = userIds.stream().map(userId -> {
-            MemberRoleDTO memberRoleDTO = new MemberRoleDTO();
-            memberRoleDTO.setMemberId(userId);
-            memberRoleDTO.setMemberType("user");
-            memberRoleDTO.setSourceId(projectId);
-            memberRoleDTO.setSourceType("project");
-            memberRoleDTO.setRoleId(projectOwnerId);
-            return memberRoleDTO;
-        }).collect(Collectors.toList());
-        baseServiceClient.assignUsersRolesOnProjectLevel(projectId, memberRoleDTOS);
+    public IamUserDTO queryUserByLoginName(String loginName) {
+        try {
+            ResponseEntity<IamUserDTO> responseEntity = baseServiceClient.queryByLoginName(loginName);
+            IamUserDTO iamUserDTO = responseEntity.getBody();
+            if (iamUserDTO == null || iamUserDTO.getId() == null) {
+                throw new CommonException("error.query.user.by.login.name", loginName);
+            }
+            return iamUserDTO;
+        } catch (Exception ex) {
+            throw new CommonException("error.query.user.by.login.name", loginName);
+        }
+    }
+
+    /**
+     * 判断用户是否是root用户
+     *
+     * @param userId
+     * @return
+     */
+    public Boolean isRoot(Long userId) {
+        ResponseEntity<Boolean> responseEntity = baseServiceClient.checkIsRoot(userId);
+        return responseEntity == null ? false : responseEntity.getBody();
+    }
+
+    /**
+     * 判段用户是否是组织root用户
+     *
+     * @param organizationId
+     * @param userId
+     * @return
+     */
+    public Boolean isOrganzationRoot(Long userId, Long organizationId) {
+        ResponseEntity<Boolean> responseEntity = baseServiceClient.checkIsOrgRoot(organizationId, userId);
+        return responseEntity == null ? false : responseEntity.getBody();
+    }
+
+    /**
+     * 校验用户是否是项目所有者
+     *
+     * @param userId    用户id
+     * @param projectId 项目id
+     * @return true表示是
+     */
+    public Boolean isProjectOwner(Long userId, Long projectId) {
+        ResponseEntity<Boolean> responseEntity = baseServiceClient.checkIsProjectOwner(userId, projectId);
+        return responseEntity == null ? false : responseEntity.getBody();
+    }
+
+    /**
+     * 查询项目下的项目所有者，用于发送通知
+     *
+     * @param projectId
+     * @return
+     */
+    public List<IamUserDTO> listProjectOwnerByProjectId(Long projectId) {
+        ResponseEntity<List<IamUserDTO>> responseEntity = baseServiceClient.listProjectOwnerByProjectId(projectId);
+        return responseEntity == null ? Collections.emptyList() : responseEntity.getBody();
+    }
+
+    /**
+     * 判断组织是否是注册组织
+     *
+     * @param organizationId
+     * @return
+     */
+    public Boolean checkOrganizationIsRegistered(Long organizationId) {
+        ResponseEntity<Boolean> responseEntity = baseServiceClient.checkOrganizationIsRegister(organizationId);
+        return responseEntity.getBody();
+    }
+
+    public Page<OrgAdministratorVO> listOrgAdministrator(Long organizationId) {
+        ResponseEntity<Page<OrgAdministratorVO>> pageInfoResponseEntity = baseServiceClient.listOrgAdministrator(organizationId, 0);
+        Page<OrgAdministratorVO> body = pageInfoResponseEntity.getBody();
+        return body;
+    }
+
+    public ResourceLimitVO queryResourceLimit() {
+        ResponseEntity<ResourceLimitVO> resourceLimitVOResponseEntity = baseServiceClient.queryResourceLimit();
+        return resourceLimitVOResponseEntity.getBody();
+    }
+
+    public List<UserProjectLabelVO> listRoleLabelsForUserInTheProject(Long userId, Set<Long> projectIds) {
+        if (CollectionUtils.isEmpty(projectIds)) {
+            return Collections.emptyList();
+        }
+        ResponseEntity<List<UserProjectLabelVO>> labels = baseServiceClient.listRoleLabelsForUserInTheProject(Objects.requireNonNull(userId), projectIds);
+        return labels.getBody();
     }
 }

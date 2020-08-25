@@ -3,17 +3,16 @@ package io.choerodon.devops.app.service;
 import java.util.List;
 import java.util.Set;
 
-import com.github.pagehelper.PageInfo;
-import io.choerodon.devops.infra.dto.DevopsConfigDTO;
 import org.springframework.web.multipart.MultipartFile;
 
-import io.choerodon.base.domain.PageRequest;
+import io.choerodon.core.domain.Page;
 import io.choerodon.devops.api.vo.AppServiceVersionAndCommitVO;
 import io.choerodon.devops.api.vo.AppServiceVersionRespVO;
 import io.choerodon.devops.api.vo.AppServiceVersionVO;
 import io.choerodon.devops.api.vo.DeployVersionVO;
 import io.choerodon.devops.infra.dto.AppServiceLatestVersionDTO;
 import io.choerodon.devops.infra.dto.AppServiceVersionDTO;
+import io.choerodon.mybatis.pagehelper.domain.PageRequest;
 
 /**
  * Created by Zenger on 2018/4/3.
@@ -23,14 +22,15 @@ public interface AppServiceVersionService {
     /**
      * 创建应用版本信息
      *
-     * @param token          token
-     * @param harborConfigId harborConfigId
      * @param image          类型
+     * @param harborConfigId harborConfigId
+     * @param token          token
      * @param version        版本
      * @param commit         commit
      * @param file           tgz包
+     * @param ref            分支名
      */
-    void create(String image, String harborConfigId, String token, String version, String commit, MultipartFile file);
+    void create(String image, String harborConfigId, String repoType, String token, String version, String commit, MultipartFile file, String ref);
 
 
     /**
@@ -57,11 +57,11 @@ public interface AppServiceVersionService {
      *
      * @param projectId    项目id
      * @param appServiceId 应用id
-     * @param pageRequest  分页参数
+     * @param pageable     分页参数
      * @param version      模糊搜索参数
      * @return ApplicationVersionRespVO
      */
-    PageInfo<AppServiceVersionVO> pageByOptions(Long projectId, Long appServiceId, Long appServiceVersionId, Boolean deployOnly, Boolean doPage, String params, PageRequest pageRequest, String version);
+    Page<AppServiceVersionVO> pageByOptions(Long projectId, Long appServiceId, Long appServiceVersionId, Boolean deployOnly, Boolean doPage, String params, PageRequest pageable, String version);
 
     /**
      * 根据应用id查询需要升级的应用版本
@@ -117,11 +117,11 @@ public interface AppServiceVersionService {
      * 获取共享应用版本
      *
      * @param appServiceId
-     * @param pageRequest
+     * @param pageable
      * @param params
      * @return
      */
-    PageInfo<AppServiceVersionRespVO> pageShareVersionByAppId(Long appServiceId, PageRequest pageRequest, String params);
+    Page<AppServiceVersionRespVO> pageShareVersionByAppId(Long appServiceId, PageRequest pageable, String params);
 
 
     List<AppServiceLatestVersionDTO> baseListAppNewestVersion(Long projectId);
@@ -139,9 +139,9 @@ public interface AppServiceVersionService {
 
     AppServiceVersionDTO baseQueryByAppServiceIdAndVersion(Long appServiceId, String version);
 
-    PageInfo<AppServiceVersionDTO> basePageByOptions(Long projectId, Long appServiceId, PageRequest pageRequest,
-                                                     String searchParam, Boolean isProjectOwner,
-                                                     Long userId);
+    Page<AppServiceVersionDTO> basePageByOptions(Long projectId, Long appServiceId, PageRequest pageable,
+                                                 String searchParam, Boolean isProjectOwner,
+                                                 Long userId);
 
     void baseUpdate(AppServiceVersionDTO appServiceVersionDTO);
 
@@ -198,4 +198,8 @@ public interface AppServiceVersionService {
     Boolean isVersionUseConfig(Long configId, String configType);
 
     void deleteByAppServiceId(Long appServiceId);
+
+    void fixHarbor();
+
+    AppServiceVersionDTO queryByCommitShaAndRef(String commitSha, String gitlabTriggerRef);
 }

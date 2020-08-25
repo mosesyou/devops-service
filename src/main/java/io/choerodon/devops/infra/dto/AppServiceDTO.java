@@ -1,8 +1,11 @@
 package io.choerodon.devops.infra.dto;
 
-import javax.persistence.*;
+import io.choerodon.mybatis.annotation.ModifyAudit;
+import io.choerodon.mybatis.annotation.VersionAudit;
+import io.choerodon.mybatis.domain.AuditDomain;
+import io.swagger.annotations.ApiModelProperty;
 
-import io.choerodon.mybatis.entity.BaseDTO;
+import javax.persistence.*;
 
 /**
  * if (!isSynchro) {
@@ -17,12 +20,16 @@ import io.choerodon.mybatis.entity.BaseDTO;
  * @author younger
  * @date 2018/3/28
  */
-
+@ModifyAudit
+@VersionAudit
 @Table(name = "devops_app_service")
-public class AppServiceDTO extends BaseDTO {
+public class AppServiceDTO extends AuditDomain {
+
+    public static final String ENCRYPT_KEY = "devops_app_service";
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @GeneratedValue(strategy = GenerationType.AUTO)
+//    @Encrypt(AppServiceDTO.ENCRYPT_KEY)
     private Long id;
     private Long projectId;
     private String name;
@@ -39,6 +46,8 @@ public class AppServiceDTO extends BaseDTO {
     private String type;
     private Boolean isSkipCheckPermission;
     private String imgUrl;
+    // TODO delete the field
+    @Deprecated
     private Long mktAppId;
 
     @Transient
@@ -49,6 +58,11 @@ public class AppServiceDTO extends BaseDTO {
     private String description;
     @Transient
     private String repoUrl;
+
+    @Transient
+    @ApiModelProperty("应用服务对应的gitlab的仓库的ssh协议克隆地址")
+    private String sshRepositoryUrl;
+
     @Transient
     private String sonarUrl;
     @Transient
@@ -146,8 +160,9 @@ public class AppServiceDTO extends BaseDTO {
         return gitlabProjectId;
     }
 
-    public void setGitlabProjectId(Integer gitlabProjectId) {
+    public AppServiceDTO setGitlabProjectId(Integer gitlabProjectId) {
         this.gitlabProjectId = gitlabProjectId;
+        return this;
     }
 
     public Boolean getActive() {
@@ -268,5 +283,45 @@ public class AppServiceDTO extends BaseDTO {
 
     public void setEmptyRepository(Boolean emptyRepository) {
         this.emptyRepository = emptyRepository;
+    }
+
+    public String getSshRepositoryUrl() {
+        return sshRepositoryUrl;
+    }
+
+    public void setSshRepositoryUrl(String sshRepositoryUrl) {
+        this.sshRepositoryUrl = sshRepositoryUrl;
+    }
+
+    @Override
+    public String toString() {
+        return "AppServiceDTO{" +
+                "id=" + id +
+                ", projectId=" + projectId +
+                ", name='" + name + '\'' +
+                ", code='" + code + '\'' +
+                ", gitlabProjectId=" + gitlabProjectId +
+                ", harborConfigId=" + harborConfigId +
+                ", chartConfigId=" + chartConfigId +
+                ", isActive=" + isActive +
+                ", isSynchro=" + isSynchro +
+                ", uuid='" + uuid + '\'' +
+                ", token='" + token + '\'' +
+                ", hookId=" + hookId +
+                ", isFailed=" + isFailed +
+                ", type='" + type + '\'' +
+                ", isSkipCheckPermission=" + isSkipCheckPermission +
+                ", imgUrl='" + imgUrl + '\'' +
+                ", mktAppId=" + mktAppId +
+                ", publishLevel='" + publishLevel + '\'' +
+                ", contributor='" + contributor + '\'' +
+                ", description='" + description + '\'' +
+                ", repoUrl='" + repoUrl + '\'' +
+                ", sshRepositoryUrl='" + sshRepositoryUrl + '\'' +
+                ", sonarUrl='" + sonarUrl + '\'' +
+                ", gitlabProjectUrl='" + gitlabProjectUrl + '\'' +
+                ", version='" + version + '\'' +
+                ", emptyRepository=" + emptyRepository +
+                '}';
     }
 }

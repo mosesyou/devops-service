@@ -1,18 +1,22 @@
 package io.choerodon.devops.infra.dto;
 
-import javax.persistence.*;
+import io.choerodon.mybatis.annotation.ModifyAudit;
+import io.choerodon.mybatis.annotation.VersionAudit;
+import io.choerodon.mybatis.domain.AuditDomain;
 
-import io.choerodon.mybatis.entity.BaseDTO;
+import javax.persistence.*;
 
 /**
  * Creator: ChangpingShi0213@gmail.com
  * Date:  19:23 2019/4/3
  * Description:
  */
+@ModifyAudit
+@VersionAudit
 @Table(name = "devops_pipeline_record")
-public class PipelineRecordDTO extends BaseDTO {
+public class PipelineRecordDTO extends AuditDomain {
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @GeneratedValue(strategy = GenerationType.AUTO)
     private Long id;
     private Long pipelineId;
     private String status;
@@ -25,9 +29,26 @@ public class PipelineRecordDTO extends BaseDTO {
     private String auditUser;
     private String errorInfo;
 
+    @Transient
+    private String stageName;
+
+    @Transient
+    private Long stageRecordId;
+
+    @Transient
+    private Long taskRecordId;
 
     @Transient
     private String env;
+
+    @Transient
+    private String recordAudit;
+
+    @Transient
+    private String stageAudit;
+
+    @Transient
+    private String taskAudit;
 
     public PipelineRecordDTO(Long pipelineId, String triggerType, Long projectId, String status, String pipelineName) {
         this.pipelineId = pipelineId;
@@ -36,7 +57,8 @@ public class PipelineRecordDTO extends BaseDTO {
         this.status = status;
         this.pipelineName = pipelineName;
     }
-    public PipelineRecordDTO(){
+
+    public PipelineRecordDTO() {
     }
 
 
@@ -135,4 +157,54 @@ public class PipelineRecordDTO extends BaseDTO {
     public void setEnv(String env) {
         this.env = env;
     }
+
+    public String getStageName() {
+        return stageName;
+    }
+
+    public PipelineRecordDTO setStageName(String stageName) {
+        this.stageName = stageName;
+        return this;
+    }
+
+    public Long getStageRecordId() {
+        return stageRecordId;
+    }
+
+    public void setStageRecordId(Long stageRecordId) {
+        this.stageRecordId = stageRecordId;
+    }
+
+    public Long getTaskRecordId() {
+        return taskRecordId;
+    }
+
+    public void setTaskRecordId(Long taskRecordId) {
+        this.taskRecordId = taskRecordId;
+    }
+
+    public String getRecordAudit() {
+        return recordAudit;
+    }
+
+    public void setRecordAudit(String recordAudit) {
+        this.recordAudit = recordAudit;
+    }
+
+    public String getStageAudit() {
+        return stageAudit;
+    }
+
+    public void setStageAudit(String stageAudit) {
+        this.stageAudit = stageAudit;
+    }
+
+    public String getTaskAudit() {
+        return taskAudit;
+    }
+
+    public void setTaskAudit(String taskAudit) {
+        this.taskAudit = taskAudit;
+    }
+
 }

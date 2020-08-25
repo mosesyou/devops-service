@@ -1,11 +1,11 @@
 package io.choerodon.devops.app.service;
 
-import com.github.pagehelper.PageInfo;
-import io.choerodon.base.domain.PageRequest;
+import java.util.List;
+
+import io.choerodon.core.domain.Page;
 import io.choerodon.devops.api.vo.AgentNodeInfoVO;
 import io.choerodon.devops.api.vo.ClusterNodeInfoVO;
-
-import java.util.List;
+import io.choerodon.mybatis.pagehelper.domain.PageRequest;
 
 /**
  * @author zmf
@@ -40,12 +40,12 @@ public interface ClusterNodeInfoService {
     /**
      * page query the node information of the cluster
      *
-     * @param clusterId   the cluster id
-     * @param projectId   the project id
-     * @param pageRequest the page parameters
+     * @param clusterId the cluster id
+     * @param projectId the project id
+     * @param pageable  the page parameters
      * @return a page of nodes
      */
-    PageInfo<ClusterNodeInfoVO> pageClusterNodeInfo(Long clusterId, Long projectId, PageRequest pageRequest);
+    Page<ClusterNodeInfoVO> pageClusterNodeInfo(Long clusterId, Long projectId, PageRequest pageable);
 
     /**
      * get cluster node information by cluster id and node name
@@ -60,4 +60,13 @@ public interface ClusterNodeInfoService {
     ClusterNodeInfoVO queryNodeInfo(Long projectId, Long clusterId, String nodeName);
 
     List<String> queryNodeName(Long projectId, Long clusterId);
+
+    /**
+     * 获取集群节点的数量
+     *
+     * @param projectId 项目id
+     * @param clusterId 集群id
+     * @return 数量
+     */
+    long countNodes(Long projectId, Long clusterId);
 }

@@ -4,17 +4,17 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import org.apache.ibatis.annotations.Param;
+
 import io.choerodon.devops.infra.dto.DevopsServiceDTO;
 import io.choerodon.devops.infra.dto.DevopsServiceQueryDTO;
-import io.choerodon.mybatis.common.Mapper;
-
-import org.apache.ibatis.annotations.Param;
+import io.choerodon.mybatis.common.BaseMapper;
 
 
 /**
  * Created by Zenger on 2018/4/15.
  */
-public interface DevopsServiceMapper extends Mapper<DevopsServiceDTO> {
+public interface DevopsServiceMapper extends BaseMapper<DevopsServiceDTO> {
 
     List<DevopsServiceQueryDTO> listDevopsServiceByPage(
             @Param("projectId") Long projectId,
@@ -44,9 +44,13 @@ public interface DevopsServiceMapper extends Mapper<DevopsServiceDTO> {
 
     int countNonDeletedServiceWithEnv(@Param("envId") Long envId, @Param("serviceId") Long serviceId);
 
-    void updateLabelsToNull(@Param("serviceId") Long serviceId);
+    void updateSelectorsToNull(@Param("serviceId") Long serviceId);
 
     void updateEndPointToNull(@Param("serviceId") Long serviceId);
+
+    void updateTargetAppServiceIdToNull(@Param("serviceId") Long serviceId);
+
+    void updateTargetInstanceCodeToNull(@Param("serviceId") Long serviceId);
 
     void setExternalIpNull(@Param("serviceId") Long serviceId);
 

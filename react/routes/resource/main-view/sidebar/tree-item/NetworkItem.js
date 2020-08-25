@@ -6,7 +6,7 @@ import { Action } from '@choerodon/boot';
 import { Icon } from 'choerodon-ui';
 import { Modal } from 'choerodon-ui/pro';
 import { useResourceStore } from '../../../stores';
-import EditNetwork from '../../contents/network/modals/network-edit';
+import EditNetwork from '../../contents/network/modals/network-operation';
 import { useMainStore } from '../../stores';
 import eventStopProp from '../../../../../utils/eventStopProp';
 import openWarnModal from '../../../../../utils/openWarnModal';
@@ -39,7 +39,7 @@ function NetworkItem({
 
   function freshMenu() {
     freshTree();
-    const [envId] = record.get('parentId').split('-');
+    const [envId] = record.get('parentId').split('**');
     if (itemType === SERVICES_GROUP && envId === parentId) {
       setUpTarget({
         type: SERVICES_GROUP,
@@ -54,7 +54,7 @@ function NetworkItem({
   }
 
   function getEnvIsNotRunning() {
-    const [envId] = record.get('parentId').split('-');
+    const [envId] = record.get('parentId').split('**');
     const envRecord = treeDs.find((item) => item.get('key') === envId);
     const connect = envRecord.get('connect');
     return !connect;
@@ -64,7 +64,7 @@ function NetworkItem({
     return checkExist({
       projectId,
       type: 'service',
-      envId: record.get('parentId').split('-')[0],
+      envId: record.get('parentId').split('**')[0],
       id: record.get('id'),
     }).then((isExist) => {
       if (!isExist) {
@@ -84,7 +84,8 @@ function NetworkItem({
           title: formatMessage({ id: 'network.header.update' }),
           children: <EditNetwork
             netId={record.get('id')}
-            envId={record.get('parentId').split('-')[0]}
+            envId={record.get('parentId').split('**')[0]}
+            appServiceId={record.get('appServiceId')}
             store={networkStore}
             refresh={freshMenu}
           />,
@@ -98,18 +99,18 @@ function NetworkItem({
   function getSuffix() {
     const id = record.get('id');
     const netName = record.get('name');
-    const [envId] = record.get('parentId').split('-');
+    const [envId] = record.get('parentId').split('**');
     const status = record.get('status');
     const disabled = getEnvIsNotRunning() || status === 'operating';
     if (disabled) {
       return null;
     }
     const actionData = [{
-      service: ['devops-service.devops-service.update'],
+      service: ['choerodon.code.project.deploy.app-deployment.resource.ps.update-net'],
       text: formatMessage({ id: 'edit' }),
       action: openModal,
     }, {
-      service: ['devops-service.devops-service.delete'],
+      service: ['choerodon.code.project.deploy.app-deployment.resource.ps.delete-net'],
       text: formatMessage({ id: 'delete' }),
       action: () => openDeleteModal(envId, id, netName, 'service', freshMenu),
     }];

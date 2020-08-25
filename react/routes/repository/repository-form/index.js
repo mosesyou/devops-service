@@ -1,18 +1,16 @@
 import React, { Fragment, useEffect } from 'react';
 import { injectIntl, FormattedMessage } from 'react-intl';
 import { observer } from 'mobx-react-lite';
-import isEmpty from 'lodash/isEmpty';
-import forEach from 'lodash/forEach';
-import pick from 'lodash/pick';
-import { SelectBox, Select, Form, TextField, UrlField, Password, EmailField, Icon } from 'choerodon-ui/pro';
-import { Button } from 'choerodon-ui';
+import { SelectBox, Select, Form, UrlField, Icon, TextField, Password } from 'choerodon-ui/pro';
+import { Button } from 'choerodon-ui/pro';
+import { withRouter } from 'react-router-dom';
 import { handlePromptError } from '../../../utils';
 
 import './index.less';
 
 const { Option } = Select;
 
-export default injectIntl(observer(({
+export default withRouter(injectIntl(observer(({
   record,
   dataSet,
   store,
@@ -22,61 +20,35 @@ export default injectIntl(observer(({
   intlPrefix,
   modal,
   isProject,
-  refresh,
+  history,
+  location: { search },
 }) => {
-  useEffect(() => {
-    if (!isEmpty(record.get('harbor'))) {
-      record.set('harborCustom', 'custom');
-      forEach(record.get('harbor').config, (value, key) => {
-        if (key !== 'project' || isProject) {
-          record.set(key, value);
-        }
-      });
-      isProject && record.set('harborPrivate', record.get('harbor').harborPrivate);
-    } else {
-      record.set('harborCustom', 'default');
-    }
-    if (!isEmpty(record.get('chart'))) {
-      const { url } = record.get('chart').config || {};
-      record.set('chartCustom', 'custom');
-      record.set('chartUrl', url);
-    } else {
-      record.set('chartCustom', 'default');
-    }
-  }, []);
+  async function refresh() {
+    await dataSet.query();
+  }
 
-  modal.handleOk(async () => {
+  async function handleSave() {
     if (record.get('harborStatus') === 'failed' || record.get('chartStatus') === 'failed') return false;
-    const harborTestFailed = record.get('harborCustom') === 'custom' && !record.get('harborStatus') && !await handleTestHarbor();
     const chartTestFailed = record.get('chartCustom') === 'custom' && !record.get('chartStatus') && !await handleTestChart();
-    if (!harborTestFailed && !chartTestFailed && (await dataSet.submit()) !== false) {
+    if (!chartTestFailed && await dataSet.submit() !== false) {
       refresh();
     } else {
-      return false;
-    }
-  });
-
-  async function handleTestHarbor() {
-    try {
-      const postData = pick(record.toData(), ['url', 'userName', 'password', 'email', 'project']);
-      const res = await store.checkHarbor(id, postData);
-      if (handlePromptError(res, false)) {
-        record.set('harborStatus', 'success');
-        return true;
-      } else {
-        record.set('harborStatus', 'failed');
-        return false;
-      }
-    } catch (e) {
-      record.set('harborStatus', 'failed');
       return false;
     }
   }
 
   async function handleTestChart() {
     try {
-      const res = await store.checkChart(id, record.get('chartUrl'));
-      if (handlePromptError(res, false)) {
+      if (!await record.validate()) {
+        return false;
+      }
+      const postData = {
+        url: record.get('url'),
+        userName: record.get('password') && record.get('userName') ? record.get('userName') : null,
+        password: record.get('password') && record.get('userName') ? record.get('password') : null,
+      };
+      const res = await store.checkChart(id, postData);
+      if (handlePromptError(res)) {
         record.set('chartStatus', 'success');
         return true;
       } else {
@@ -91,7 +63,7 @@ export default injectIntl(observer(({
 
   function renderTestButton(status, handleClick) {
     return (
-      <Fragment>
+      <div className={`${prefixCls}-form-btnContent`}>
         <Button
           onClick={handleClick}
           funcType="raised"
@@ -108,52 +80,74 @@ export default injectIntl(observer(({
             {formatMessage({ id: `${intlPrefix}.test.${status}` })}
           </span>
         )}
-      </Fragment>
+      </div>
     );
   }
 
+  function handleLink() {
+    history.push(`/rdupm/product-lib${search}`);
+  }
+
   return (
-    <div className={`${prefixCls}-form`}>
+    <div className={`${prefixCls}-form-wrap`}>
       <div className={`${prefixCls}-form-info`}>
         <Icon type="info" className={`${prefixCls}-form-info-icon`} />
         <FormattedMessage id={`${intlPrefix}.info`} />
       </div>
-      <Form record={record}>
-        <SelectBox name="harborCustom">
-          <Option value="default">{formatMessage({ id: `${intlPrefix}.harbor.default` })}</Option>
-          <Option value="custom">{formatMessage({ id: `${intlPrefix}.harbor.custom` })}</Option>
-        </SelectBox>
-      </Form>
-      {isProject && record.get('harborCustom') === 'default' && (
+      {isProject ? (<div>
+        <span className={`${prefixCls}-form-config-title`}>
+          {formatMessage({ id: `${intlPrefix}.harbor.config` })}
+        </span>
+        <div className={`${prefixCls}-empty-page`}>
+          <div className={`${prefixCls}-empty-page-image`} />
+          <div className={`${prefixCls}-empty-page-text`}>
+            <div className={`${prefixCls}-empty-page-title`}>
+              {formatMessage({ id: `${intlPrefix}.empty.title` })}
+            </div>
+            <div className={`${prefixCls}-empty-page-des`}>
+              {formatMessage({ id: `${intlPrefix}.empty.des` })}
+            </div>
+            <Button
+              color="primary"
+              onClick={handleLink}
+              funcType="raised"
+            >
+              {formatMessage({ id: `${intlPrefix}.empty.link` })}
+            </Button>
+          </div>
+        </div>
+      </div>) : null}
+      <div className={`${prefixCls}-form`}>
+        <span className={`${prefixCls}-form-config-title`}>
+          {formatMessage({ id: `${intlPrefix}.chart.config` })}
+        </span>
         <Form record={record}>
-          <SelectBox name="harborPrivate">
-            <Option value={false}>{formatMessage({ id: `${intlPrefix}.public` })}</Option>
-            <Option value>{formatMessage({ id: `${intlPrefix}.private` })}</Option>
+          <SelectBox name="chartCustom">
+            <Option value="default">{formatMessage({ id: `${intlPrefix}.chart.default` })}</Option>
+            <Option value="custom">{formatMessage({ id: `${intlPrefix}.chart.custom` })}</Option>
           </SelectBox>
+          {record.get('chartCustom') === 'custom' && ([
+            <UrlField name="url" />,
+            <TextField name="userName" />,
+            <Password name="password" />,
+            renderTestButton(record.get('chartStatus'), handleTestChart),
+          ])}
         </Form>
-      )}
-      {record.get('harborCustom') === 'custom' && (<Fragment>
-        <Form record={record}>
-          <UrlField name="url" />
-          <TextField name="userName" />
-          <Password name="password" />
-          <EmailField name="email" />
-          {isProject && <TextField name="project" />}
-        </Form>
-        {renderTestButton(record.get('harborStatus'), handleTestHarbor)}
-      </Fragment>)}
-      <Form record={record}>
-        <SelectBox name="chartCustom">
-          <Option value="default">{formatMessage({ id: `${intlPrefix}.chart.default` })}</Option>
-          <Option value="custom">{formatMessage({ id: `${intlPrefix}.chart.custom` })}</Option>
-        </SelectBox>
-      </Form>
-      {record.get('chartCustom') === 'custom' && (<Fragment>
-        <Form record={record}>
-          <UrlField name="chartUrl" />
-        </Form>
-        {renderTestButton(record.get('chartStatus'), handleTestChart)}
-      </Fragment>)}
+      </div>
+      <div style={{ display: 'flex' }}>
+        <Button
+          color="primary"
+          funcType="raised"
+          onClick={handleSave}
+          style={{ marginRight: '.12rem' }}
+        >{formatMessage({ id: 'save' })}</Button>
+        <Button
+          funcType="raised"
+          onClick={refresh}
+        >
+          <span style={{ color: '#3f51b5' }}>{formatMessage({ id: 'cancel' })}</span>
+        </Button>
+      </div>
     </div>
   );
-}));
+})));

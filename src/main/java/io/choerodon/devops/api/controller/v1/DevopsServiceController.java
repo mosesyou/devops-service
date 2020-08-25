@@ -4,26 +4,27 @@ import java.util.List;
 import java.util.Optional;
 import javax.validation.Valid;
 
-import com.github.pagehelper.PageInfo;
+import io.swagger.annotations.ApiOperation;
+import io.swagger.annotations.ApiParam;
+import org.hzero.starter.keyencrypt.core.Encrypt;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import io.swagger.annotations.ApiOperation;
-import io.swagger.annotations.ApiParam;
 import springfox.documentation.annotations.ApiIgnore;
 
-import io.choerodon.base.annotation.Permission;
-import io.choerodon.base.domain.PageRequest;
-import io.choerodon.base.domain.Sort;
-import io.choerodon.base.enums.ResourceType;
+import io.choerodon.core.domain.Page;
 import io.choerodon.core.exception.CommonException;
 import io.choerodon.core.iam.InitRoleCode;
+import io.choerodon.core.iam.ResourceLevel;
 import io.choerodon.devops.api.vo.DevopsServiceReqVO;
 import io.choerodon.devops.api.vo.DevopsServiceVO;
 import io.choerodon.devops.app.service.DevopsServiceService;
-import io.choerodon.mybatis.annotation.SortDefault;
+import io.choerodon.mybatis.pagehelper.annotation.SortDefault;
+import io.choerodon.mybatis.pagehelper.domain.PageRequest;
+import io.choerodon.mybatis.pagehelper.domain.Sort;
 import io.choerodon.swagger.annotation.CustomPageRequest;
+import io.choerodon.swagger.annotation.Permission;
 
 /**
  * Created by Zenger on 2018/4/13.
@@ -32,7 +33,7 @@ import io.choerodon.swagger.annotation.CustomPageRequest;
 @RequestMapping(value = "/v1/projects/{project_id}/service")
 public class DevopsServiceController {
 
-    public static final String ERROR_APP_K8S_SERVICE_QUERY = "error.app.k8s.service.query";
+    private static final String ERROR_APP_K8S_SERVICE_QUERY = "error.app.k8s.service.query";
 
     @Autowired
     private DevopsServiceService devopsServiceService;
@@ -45,13 +46,14 @@ public class DevopsServiceController {
      * @param name      网络名
      * @return Boolean
      */
-    @Permission(type = ResourceType.PROJECT, roles = {InitRoleCode.PROJECT_OWNER,
+    @Permission(level = ResourceLevel.ORGANIZATION, roles = {InitRoleCode.PROJECT_OWNER,
             InitRoleCode.PROJECT_MEMBER})
-    @ApiOperation(value = "检查网络唯一性")
+    @ApiOperation(value = "检查网络名称唯一性")
     @GetMapping(value = "/check_name")
     public ResponseEntity<Boolean> checkName(
             @ApiParam(value = "项目ID", required = true)
             @PathVariable(value = "project_id") Long projectId,
+            @Encrypt
             @ApiParam(value = "环境ID", required = true)
             @RequestParam(value = "env_id") Long envId,
             @ApiParam(value = "网络名", required = true)
@@ -68,14 +70,15 @@ public class DevopsServiceController {
      * @param devopsServiceReqVO 部署网络参数
      * @return Boolean
      */
-    @Permission(type = ResourceType.PROJECT, roles = {InitRoleCode.PROJECT_OWNER,
+    @Permission(level = ResourceLevel.ORGANIZATION, roles = {InitRoleCode.PROJECT_OWNER,
             InitRoleCode.PROJECT_MEMBER})
     @ApiOperation(value = "部署网络")
     @PostMapping
-    public ResponseEntity<Boolean> create(@ApiParam(value = "项目ID", required = true)
-                                          @PathVariable(value = "project_id") Long projectId,
-                                          @ApiParam(value = "部署网络参数", required = true)
-                                          @RequestBody @Valid DevopsServiceReqVO devopsServiceReqVO) {
+    public ResponseEntity<Boolean> create(
+            @ApiParam(value = "项目ID", required = true)
+            @PathVariable(value = "project_id") Long projectId,
+            @ApiParam(value = "部署网络参数", required = true)
+            @RequestBody @Valid DevopsServiceReqVO devopsServiceReqVO) {
         return Optional.ofNullable(
                 devopsServiceService.create(projectId, devopsServiceReqVO))
                 .map(target -> new ResponseEntity<>(target, HttpStatus.CREATED))
@@ -90,16 +93,18 @@ public class DevopsServiceController {
      * @param devopsServiceReqVO 部署网络参数
      * @return Boolean
      */
-    @Permission(type = ResourceType.PROJECT, roles = {InitRoleCode.PROJECT_OWNER,
+    @Permission(level = ResourceLevel.ORGANIZATION, roles = {InitRoleCode.PROJECT_OWNER,
             InitRoleCode.PROJECT_MEMBER})
     @ApiOperation(value = "更新网络")
     @PutMapping(value = "/{id}")
-    public ResponseEntity<Boolean> update(@ApiParam(value = "项目ID", required = true)
-                                          @PathVariable(value = "project_id") Long projectId,
-                                          @ApiParam(value = "网络ID", required = true)
-                                          @PathVariable Long id,
-                                          @ApiParam(value = "部署网络参数", required = true)
-                                          @RequestBody DevopsServiceReqVO devopsServiceReqVO) {
+    public ResponseEntity<Boolean> update(
+            @ApiParam(value = "项目ID", required = true)
+            @PathVariable(value = "project_id") Long projectId,
+            @Encrypt
+            @ApiParam(value = "网络ID", required = true)
+            @PathVariable Long id,
+            @ApiParam(value = "部署网络参数", required = true)
+            @RequestBody DevopsServiceReqVO devopsServiceReqVO) {
         return Optional.ofNullable(
                 devopsServiceService.update(projectId, id, devopsServiceReqVO))
                 .map(target -> new ResponseEntity<>(target, HttpStatus.CREATED))
@@ -113,16 +118,18 @@ public class DevopsServiceController {
      * @param id        网络ID
      * @return ResponseEntity
      */
-    @Permission(type = ResourceType.PROJECT, roles = {InitRoleCode.PROJECT_OWNER,
+    @Permission(level = ResourceLevel.ORGANIZATION, roles = {InitRoleCode.PROJECT_OWNER,
             InitRoleCode.PROJECT_MEMBER})
     @ApiOperation(value = "删除网络")
     @DeleteMapping(value = "/{id}")
-    public ResponseEntity delete(@ApiParam(value = "项目ID", required = true)
-                                 @PathVariable(value = "project_id") Long projectId,
-                                 @ApiParam(value = "网络ID", required = true)
-                                 @PathVariable Long id) {
-        devopsServiceService.delete(id);
-        return new ResponseEntity<>(HttpStatus.NO_CONTENT);
+    public ResponseEntity<Void> delete(
+            @ApiParam(value = "项目ID", required = true)
+            @PathVariable(value = "project_id") Long projectId,
+            @Encrypt
+            @ApiParam(value = "网络ID", required = true)
+            @PathVariable Long id) {
+        devopsServiceService.delete(projectId, id);
+        return ResponseEntity.noContent().build();
     }
 
 
@@ -133,7 +140,7 @@ public class DevopsServiceController {
      * @param envId     参数
      * @return List of DevopsServiceVO
      */
-    @Permission(type = ResourceType.PROJECT,
+    @Permission(level = ResourceLevel.ORGANIZATION,
             roles = {InitRoleCode.PROJECT_OWNER,
                     InitRoleCode.PROJECT_MEMBER})
     @ApiOperation(value = "根据环境查询网络列表")
@@ -141,10 +148,12 @@ public class DevopsServiceController {
     public ResponseEntity<List<DevopsServiceVO>> listByEnvId(
             @ApiParam(value = "项目ID", required = true)
             @PathVariable(value = "project_id") Long projectId,
+            @Encrypt
             @ApiParam(value = "环境ID", required = true)
             @RequestParam(value = "env_id") Long envId,
-            @ApiParam(value = "服务id",required = false)
-            @RequestParam(value = "app_service_id" ,required = false) Long appServiceId) {
+            @Encrypt
+            @ApiParam(value = "服务id", required = false)
+            @RequestParam(value = "app_service_id", required = false) Long appServiceId) {
         return Optional.ofNullable(devopsServiceService.listByEnvIdAndAppServiceId(envId, appServiceId))
                 .map(target -> new ResponseEntity<>(target, HttpStatus.OK))
                 .orElseThrow(() -> new CommonException("error.app.k8s.service.env.query"));
@@ -157,13 +166,14 @@ public class DevopsServiceController {
      * @param id        网络id
      * @return DevopsServiceVO
      */
-    @Permission(type = ResourceType.PROJECT, roles = {InitRoleCode.PROJECT_OWNER,
+    @Permission(level = ResourceLevel.ORGANIZATION, roles = {InitRoleCode.PROJECT_OWNER,
             InitRoleCode.PROJECT_MEMBER})
     @ApiOperation(value = "查询单个网络")
     @GetMapping(value = "/{id}")
     public ResponseEntity<DevopsServiceVO> query(
             @ApiParam(value = "项目ID", required = true)
             @PathVariable(value = "project_id") Long projectId,
+            @Encrypt
             @ApiParam(value = "网络ID", required = true)
             @PathVariable Long id) {
         return Optional.ofNullable(devopsServiceService.querySingleService(id))
@@ -180,13 +190,14 @@ public class DevopsServiceController {
      * @param name      网络名
      * @return DevopsServiceVO
      */
-    @Permission(type = ResourceType.PROJECT, roles = {InitRoleCode.PROJECT_OWNER,
+    @Permission(level = ResourceLevel.ORGANIZATION, roles = {InitRoleCode.PROJECT_OWNER,
             InitRoleCode.PROJECT_MEMBER})
     @ApiOperation(value = "根据网络名查询网络")
     @GetMapping(value = "/query_by_name")
     public ResponseEntity<DevopsServiceVO> queryByName(
             @ApiParam(value = "项目ID", required = true)
             @PathVariable(value = "project_id") Long projectId,
+            @Encrypt
             @ApiParam(value = "环境Id", required = true)
             @RequestParam(value = "env_id") Long envId,
             @ApiParam(value = "网络名", required = true)
@@ -201,29 +212,31 @@ public class DevopsServiceController {
      *
      * @param projectId   项目id
      * @param envId       环境id
-     * @param pageRequest 分页参数
+     * @param pageable    分页参数
      * @param searchParam 查询参数
      * @return Page of DevopsServiceVO
      */
-    @Permission(type = ResourceType.PROJECT,
+    @Permission(level = ResourceLevel.ORGANIZATION,
             roles = {InitRoleCode.PROJECT_OWNER,
                     InitRoleCode.PROJECT_MEMBER})
     @ApiOperation(value = "分页查询网络")
     @CustomPageRequest
     @PostMapping(value = "/page_by_options")
-    public ResponseEntity<PageInfo<DevopsServiceVO>> pageByEnv(
+    public ResponseEntity<Page<DevopsServiceVO>> pageByEnv(
             @ApiParam(value = "项目ID", required = true)
             @PathVariable(value = "project_id") Long projectId,
+            @Encrypt
             @ApiParam(value = "环境id", required = true)
             @RequestParam(value = "env_id") Long envId,
+            @Encrypt
             @ApiParam(value = "服务id")
             @RequestParam(value = "app_service_id", required = false) Long appServiceId,
             @ApiParam(value = "分页参数")
             @SortDefault(value = "id", direction = Sort.Direction.DESC)
-            @ApiIgnore PageRequest pageRequest,
+            @ApiIgnore PageRequest pageable,
             @ApiParam(value = "查询参数")
             @RequestBody(required = false) String searchParam) {
-        return Optional.ofNullable(devopsServiceService.pageByEnv(projectId, envId, pageRequest, searchParam, appServiceId))
+        return Optional.ofNullable(devopsServiceService.pageByEnv(projectId, envId, pageable, searchParam, appServiceId))
                 .map(target -> new ResponseEntity<>(target, HttpStatus.OK))
                 .orElseThrow(() -> new CommonException(ERROR_APP_K8S_SERVICE_QUERY));
     }
@@ -232,32 +245,35 @@ public class DevopsServiceController {
     /**
      * 查询实例下关联的网络域名（不包含chart）
      *
-     * @param projectId   项目id
-     * @param instanceId  实例Id
-     * @param pageRequest 分页参数
+     * @param projectId  项目id
+     * @param instanceId 实例Id
+     * @param pageable   分页参数
      * @return Page of DevopsServiceVO
      */
-    @Permission(type = ResourceType.PROJECT,
+    @Permission(level = ResourceLevel.ORGANIZATION,
             roles = {InitRoleCode.PROJECT_OWNER,
                     InitRoleCode.PROJECT_MEMBER})
     @ApiOperation(value = "查询实例下关联的网络域名（不包含chart）")
     @CustomPageRequest
     @PostMapping(value = "/page_by_instance")
-    public ResponseEntity<PageInfo<DevopsServiceVO>> pageByInstance(
+    public ResponseEntity<Page<DevopsServiceVO>> pageByInstance(
             @ApiParam(value = "项目ID", required = true)
             @PathVariable(value = "project_id") Long projectId,
+            @Encrypt
             @ApiParam(value = "环境id")
             @RequestParam(value = "env_id") Long envId,
+            @Encrypt
             @ApiParam(value = "实例id")
             @RequestParam(value = "instance_id", required = false) Long instanceId,
+            @Encrypt
             @ApiParam(value = "服务id")
             @RequestParam(value = "app_service_id", required = false) Long appServiceId,
             @ApiParam(value = "分页参数")
             @SortDefault(value = "id", direction = Sort.Direction.DESC)
-            @ApiIgnore PageRequest pageRequest,
+            @ApiIgnore PageRequest pageable,
             @ApiParam(value = "查询参数")
             @RequestBody(required = false) String searchParam) {
-        return Optional.ofNullable(devopsServiceService.pageByInstance(projectId, envId, instanceId, pageRequest, appServiceId, searchParam))
+        return Optional.ofNullable(devopsServiceService.pageByInstance(projectId, envId, instanceId, pageable, appServiceId, searchParam))
                 .map(target -> new ResponseEntity<>(target, HttpStatus.OK))
                 .orElseThrow(() -> new CommonException(ERROR_APP_K8S_SERVICE_QUERY));
     }

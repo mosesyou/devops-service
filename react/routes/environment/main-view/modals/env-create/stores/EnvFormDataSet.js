@@ -4,15 +4,18 @@ import React from 'react';
 export default ({ formatMessage, intlPrefix, projectId, groupOptionDs, clusterOptionDs }) => {
   const codeValidator = async (value, name, record) => {
     const clusterId = record.get('clusterId');
-    try {
-      const res = await axios.get(`/devops/v1/projects/${projectId}/envs/check_code?cluster_id=${clusterId}&code=${value}`);
-      if (res.failed) {
-        return res.message;
-      } else {
-        return true;
+    const pa = /^[a-z]([-a-z0-9]*[a-z0-9])?$/;
+    if (value && pa.test(value)) {
+      try {
+        const res = await axios.get(`/devops/v1/projects/${projectId}/envs/check_code?cluster_id=${clusterId}&code=${value}`);
+        if (!res) {
+          return formatMessage({ id: 'checkCodeExist' });
+        } else {
+          return true;
+        }
+      } catch (err) {
+        return '环境编码校验失败，请稍后再试';
       }
-    } catch (err) {
-      return '环境编码校验失败，请稍后再试';
     }
   };
 
@@ -28,7 +31,7 @@ export default ({ formatMessage, intlPrefix, projectId, groupOptionDs, clusterOp
     fields: [
       {
         name: 'clusterId',
-        type: 'number',
+        type: 'string',
         textField: 'name',
         label: formatMessage({ id: 'c7ncd.env.cluster.select' }),
         valueField: 'id',
@@ -60,7 +63,7 @@ export default ({ formatMessage, intlPrefix, projectId, groupOptionDs, clusterOp
       },
       {
         name: 'devopsEnvGroupId',
-        type: 'number',
+        type: 'string',
         textField: 'name',
         valueField: 'id',
         label: '选择分组',

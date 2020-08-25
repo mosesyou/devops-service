@@ -1,18 +1,21 @@
 package io.choerodon.devops.infra.mapper;
 
+import io.choerodon.devops.api.vo.LatestAppServiceVO;
+import io.choerodon.devops.api.vo.ProjectAppSvcCountVO;
+import io.choerodon.devops.infra.dto.AppServiceDTO;
+import io.choerodon.mybatis.common.BaseMapper;
+
+import org.apache.ibatis.annotations.Param;
+
+import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import org.apache.ibatis.annotations.Param;
-
-import io.choerodon.devops.infra.dto.AppServiceDTO;
-import io.choerodon.mybatis.common.Mapper;
-
 /**
  * Created by younger on 2018/3/28.
  */
-public interface AppServiceMapper extends Mapper<AppServiceDTO> {
+public interface AppServiceMapper extends BaseMapper<AppServiceDTO> {
     void updateByIdSelectiveWithoutAudit(@Param("appService") AppServiceDTO appService);
 
     List<AppServiceDTO> list(@Param("projectId") Long projectId,
@@ -86,24 +89,11 @@ public interface AppServiceMapper extends Mapper<AppServiceDTO> {
 
     List<AppServiceDTO> queryOrganizationShareApps(@Param("projectIds") List<Long> projectIds,
                                                    @Param("param") String param,
-                                                   @Param("searchProjectId") Long searchProjectId);
+                                                   @Param("projectId") Long projectId);
 
-    List<AppServiceDTO> queryMarketDownloadApps(@Param("type") String type,
-                                                @Param("param") String param,
-                                                @Param("appServiceIds") List<Long> appServiceIds,
-                                                @Param("searchProjectId") Long searchProjectId);
-
-    /**
-     * 根据ProjectID 查询可用的项目共享Apps
-     *
-     * @param projectId
-     * @return
-     */
-    List<AppServiceDTO> listShareProjectApps(@Param("projectId") Long projectId,
-                                             @Param("param") String param,
-                                             @Param("searchProjectId") Long searchProjectId);
 
     List<AppServiceDTO> listProjectMembersAppService(@Param("projectId") Long projectId,
+                                                     @Param("appServiceIds") Set<Long> appServiceIds,
                                                      @Param("isActive") Boolean isActive,
                                                      @Param("hasVersion") Boolean hasVersion,
                                                      @Param("type") String type,
@@ -118,10 +108,12 @@ public interface AppServiceMapper extends Mapper<AppServiceDTO> {
                                             @Param("params") List<String> params);
 
     List<AppServiceDTO> listProjectMembersAppServiceByActive(@Param("projectId") Long projectId,
+                                                             @Param("appServiceIds") Set<Long> appServiceIds,
                                                              @Param("userId") Long userId);
 
     Integer countProjectMembersAppServiceByActive(@Param("projectId") Long projectId,
-                                                             @Param("userId") Long userId);
+                                                  @Param("appServiceIds") Set<Long> appServiceIds,
+                                                  @Param("userId") Long userId);
 
     List<AppServiceDTO> pageServiceByProjectId(@Param("projectId") Long projectId,
                                                @Param("searchParam") Map<String, Object> searchParam,
@@ -135,6 +127,8 @@ public interface AppServiceMapper extends Mapper<AppServiceDTO> {
 
     int updateIsActiveNullToTrue();
 
+    List<AppServiceDTO> listAll(@Param("projectId") Long projectId);
+
     /**
      * 根据gitlabGroupId和iamUserId获取
      * 在整个项目组用权限的应用对应的gitlabProjectId
@@ -143,5 +137,49 @@ public interface AppServiceMapper extends Mapper<AppServiceDTO> {
      */
     List<Long> listGitlabProjectIdByAppPermission(@Param("gitlabGroupId") Long gitlabGroupId,
                                                   @Param("iamUserId") Long iamUserId);
+
+    List<AppServiceDTO> queryAppServicesHavingVersions(@Param("projectId") Long projectId);
+
+    /**
+     * 作为所有者，查询能够用于创建CI流水线的应用服务列表，限制20条
+     *
+     * @param projectId   项目id
+     * @param searchParam 字段模糊搜索参数
+     * @param params      整体模糊搜索参数
+     * @return 列表
+     */
+    List<AppServiceDTO> listAppServiceToCreatePipelineForOwner(@Param("projectId") Long projectId,
+                                                               @Param("searchParam") Map<String, Object> searchParam,
+                                                               @Param("params") List<String> params);
+
+    /**
+     * 作为项目成员，查询能够用于创建CI流水线的应用服务列表，限制20条
+     *
+     * @param projectId   项目id
+     * @param iamUserId   用户id
+     * @param searchParam 字段模糊搜索参数
+     * @param params      整体模糊搜索参数
+     * @return 列表
+     */
+    List<AppServiceDTO> listAppServiceToCreatePipelineForMember(@Param("projectId") Long projectId,
+                                                                @Param("iamUserId") Long iamUserId,
+                                                                @Param("appServiceIds") Set<Long> appServiceIds,
+                                                                @Param("searchParam") Map<String, Object> searchParam,
+                                                                @Param("params") List<String> params);
+
+    /**
+     * 查询出指定项目下最近使用过的应用
+     *
+     * @param projectIds 项目ids
+     * @param time
+     * @return 应用id和最后更新时间
+     */
+    List<LatestAppServiceVO> listLatestUseAppServiceIdAndDate(@Param("projectIds") List<Long> projectIds,
+                                                              @Param("userId") Long userId,
+                                                              @Param("time") Date time);
+
+    List<AppServiceDTO> listByActiveAndProjects(@Param("projectIds") List<Long> projectIds);
+
+    List<ProjectAppSvcCountVO> countByProjectIds(@Param("projectIds") List<Long> projectIds);
 }
 

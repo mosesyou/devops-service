@@ -5,14 +5,19 @@ import HeaderButtons from '../../../../../../components/header-buttons';
 import { useResourceStore } from '../../../../stores';
 import { useApplicationStore } from '../stores';
 import Detail from './detail';
-import KeyValueModal from './key-value';
-import DomainModal from './domain';
-import CreateNetwork from './network';
+import KeyValueModal from './key-value/KeyValueProIndex';
+import CreateNetwork2 from './network2';
+import DomainForm from '../../../components/domain-form';
 
 const modalKey1 = Modal.key();
 const modalKey2 = Modal.key();
+const createNetWorkKey = Modal.key();
+const createDomainKey = Modal.key();
 const modalStyle2 = {
   width: 'calc(100vw - 3.52rem)',
+};
+const modalStyle3 = {
+  width: 740,
 };
 
 const AppModals = observer(() => {
@@ -35,7 +40,6 @@ const AppModals = observer(() => {
     baseInfoDs,
     mappingStore,
     cipherStore,
-    domainStore,
     networkStore,
     netDs,
     mappingDs,
@@ -44,9 +48,6 @@ const AppModals = observer(() => {
     checkAppExist,
   } = useApplicationStore();
   const { id, parentId } = resourceStore.getSelectedMenu;
-
-  const [showDomain, setShowDomain] = useState(false);
-  const [showNetwork, setShowNetwork] = useState(false);
 
   function refresh() {
     checkAppExist().then((query) => {
@@ -118,14 +119,48 @@ const AppModals = observer(() => {
     });
   }
 
-  function closeDomain(isLoad) {
-    setShowDomain(false);
-    isLoad && setTabKey(NET_TAB);
+  function saveNetworkIds(ids) {
+    const {
+      getTabKey,
+      setNetworkIds,
+    } = appStore;
+    if (getTabKey === 'net') {
+      setNetworkIds(ids);
+    }
   }
 
-  function closeNetwork(isLoad) {
-    setShowNetwork(false);
-    isLoad && setTabKey(NET_TAB);
+  function openNetWork() {
+    Modal.open({
+      key: createNetWorkKey,
+      title: formatMessage({ id: 'network.header.create' }),
+      style: { width: 740 },
+      okText: formatMessage({ id: 'create' }),
+      drawer: true,
+      children: <CreateNetwork2
+        envId={parentId}
+        appId={id}
+        networkStore={networkStore}
+        refresh={refresh}
+      />,
+    });
+  }
+
+  function openDomain() {
+    Modal.open({
+      key: createDomainKey,
+      style: modalStyle3,
+      drawer: true,
+      title: formatMessage({ id: 'domain.create.head' }),
+      children: <DomainForm
+        envId={parentId}
+        appServiceId={id}
+        refresh={refresh}
+        intlPrefix={intlPrefix}
+        prefixCls={prefixCls}
+        saveNetworkIds={saveNetworkIds}
+      />,
+      okText: formatMessage({ id: 'create' }),
+    });
   }
 
   function getButtons() {
@@ -135,20 +170,23 @@ const AppModals = observer(() => {
     const disabled = !connect || notReady;
 
     return [{
+      permissions: ['choerodon.code.project.deploy.app-deployment.resource.ps.network'],
       disabled,
       name: formatMessage({ id: `${intlPrefix}.create.network` }),
       icon: 'playlist_add',
-      handler: () => setShowNetwork(true),
+      handler: openNetWork,
       display: true,
       group: 1,
     }, {
+      permissions: ['choerodon.code.project.deploy.app-deployment.resource.ps.domain'],
       disabled,
       name: formatMessage({ id: `${intlPrefix}.create.ingress` }),
       icon: 'playlist_add',
-      handler: () => setShowDomain(true),
+      handler: openDomain,
       display: true,
       group: 1,
     }, {
+      permissions: ['choerodon.code.project.deploy.app-deployment.resource.ps.configmap'],
       disabled,
       name: formatMessage({ id: `${intlPrefix}.create.configMap` }),
       icon: 'playlist_add',
@@ -156,6 +194,7 @@ const AppModals = observer(() => {
       display: true,
       group: 1,
     }, {
+      permissions: ['choerodon.code.project.deploy.app-deployment.resource.ps.cipher'],
       disabled,
       name: formatMessage({ id: `${intlPrefix}.create.cipher` }),
       icon: 'playlist_add',
@@ -180,25 +219,6 @@ const AppModals = observer(() => {
 
   return (<div>
     <HeaderButtons items={getButtons()} />
-    {showDomain && (
-      <DomainModal
-        envId={parentId}
-        appServiceId={id}
-        visible={showDomain}
-        type="create"
-        store={domainStore}
-        onClose={closeDomain}
-      />
-    )}
-    {showNetwork && (
-      <CreateNetwork
-        envId={parentId}
-        appServiceId={id}
-        visible={showNetwork}
-        store={networkStore}
-        onClose={closeNetwork}
-      />
-    )}
   </div>);
 });
 

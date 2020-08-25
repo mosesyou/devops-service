@@ -2,24 +2,28 @@ package io.choerodon.devops.infra.dto;
 
 import javax.persistence.*;
 
-import io.choerodon.mybatis.entity.BaseDTO;
+import io.choerodon.mybatis.annotation.ModifyAudit;
+import io.choerodon.mybatis.annotation.VersionAudit;
+import io.choerodon.mybatis.domain.AuditDomain;
 
 /**
  * Creator: ChangpingShi0213@gmail.com
  * Date:  17:37 2019/5/13
  * Description:
  */
+
+@ModifyAudit
+@VersionAudit
 @Table(name = "devops_notification")
-public class DevopsNotificationDTO extends BaseDTO {
+public class DevopsNotificationDTO extends AuditDomain {
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @GeneratedValue(strategy = GenerationType.AUTO)
     private Long id;
     private Long envId;
     private Long projectId;
     private String notifyTriggerEvent;
     private String notifyObject;
     private String notifyType;
-
     @Transient
     private String envName;
 
@@ -78,4 +82,5 @@ public class DevopsNotificationDTO extends BaseDTO {
     public void setNotifyType(String notifyType) {
         this.notifyType = notifyType;
     }
+
 }

@@ -1,25 +1,47 @@
 package io.choerodon.devops.infra.dto;
 
+import javax.annotation.Nullable;
 import javax.persistence.*;
 
-import io.choerodon.mybatis.entity.BaseDTO;
+import io.swagger.annotations.ApiModelProperty;
+
+import io.choerodon.mybatis.annotation.ModifyAudit;
+import io.choerodon.mybatis.annotation.VersionAudit;
+import io.choerodon.mybatis.domain.AuditDomain;
 
 /**
  * Created by Zenger on 2018/4/14.
  */
+@ModifyAudit
+@VersionAudit
 @Table(name = "devops_app_service_instance")
-public class AppServiceInstanceDTO extends BaseDTO {
+public class AppServiceInstanceDTO extends AuditDomain {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @GeneratedValue(strategy = GenerationType.AUTO)
     private Long id;
     private String code;
     private Long appServiceId;
+    /**
+     * 这个应用服务版本是可能为空的，是集群中实际部署的实例的版本id
+     * 假如第一次部署就失败了，这个值就可能是空的
+     */
+    @Nullable
     private Long appServiceVersionId;
     private Long envId;
+    /**
+     * 因为脏数据，还有可能为空
+     */
+    @Nullable
     private Long commandId;
     private String status;
     private Long valueId;
+    @ApiModelProperty("组件所对应的实例的版本/普通实例这个值为null")
+    private String componentVersion;
+    @ApiModelProperty("组件对应实例的chart名称/普通实例这个值为null")
+    private String componentChartName;
+    @ApiModelProperty("当前实例生效的commandId")
+    private Long effectCommandId;
 
     @Transient
     private String appServiceName;
@@ -56,6 +78,14 @@ public class AppServiceInstanceDTO extends BaseDTO {
     @Transient
     private String appServiceCode;
 
+
+    public Long getEffectCommandId() {
+        return effectCommandId;
+    }
+
+    public void setEffectCommandId(Long effectCommandId) {
+        this.effectCommandId = effectCommandId;
+    }
 
     public Long getAppServiceVersionId() {
         return appServiceVersionId;
@@ -256,5 +286,21 @@ public class AppServiceInstanceDTO extends BaseDTO {
 
     public void setAppServiceCode(String appServiceCode) {
         this.appServiceCode = appServiceCode;
+    }
+
+    public String getComponentVersion() {
+        return componentVersion;
+    }
+
+    public void setComponentVersion(String componentVersion) {
+        this.componentVersion = componentVersion;
+    }
+
+    public String getComponentChartName() {
+        return componentChartName;
+    }
+
+    public void setComponentChartName(String componentChartName) {
+        this.componentChartName = componentChartName;
     }
 }

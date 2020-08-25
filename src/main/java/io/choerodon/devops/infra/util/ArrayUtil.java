@@ -1,8 +1,6 @@
 package io.choerodon.devops.infra.util;
 
-import java.util.Collection;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 /**
  * @Author: changzhuang
@@ -31,5 +29,41 @@ public class ArrayUtil {
     //判断List是否为空
     public static boolean isEmpty(List<Object> list) {
         return list == null || list.isEmpty();
+    }
+
+    /**
+     * 把单个对象存入list中
+     *
+     * @param obj 对象
+     * @param <T> 泛型
+     * @return 列表
+     */
+    public static <T> List<T> singleAsList(T obj) {
+        List<T> list = new ArrayList<>();
+        list.add(obj);
+        return list;
+    }
+
+    public static <T> Set<T> singleAsSet(T obj) {
+        Set<T> set = new HashSet<>();
+        set.add(obj);
+        return set;
+    }
+
+    /**
+     * 将所有数组元素按顺序加入到队尾
+     *
+     * @param queue    队列
+     * @param elements 元素数组
+     * @param <T>      类型
+     */
+    public static <T> void offerAllToQueue(Queue<T> queue, T[] elements) {
+        if (elements != null) {
+            for (T e : elements) {
+                if (e != null) {
+                    queue.offer(e);
+                }
+            }
+        }
     }
 }

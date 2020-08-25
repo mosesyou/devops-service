@@ -5,7 +5,7 @@ export default (formatMessage) => ({
   fields: [
     {
       name: 'id',
-      type: 'number',
+      type: 'string',
     },
     {
       name: 'name',
@@ -36,5 +36,11 @@ export default (formatMessage) => ({
       label: formatMessage({ id: 'updateDate' }),
     },
   ],
-  queryFields: [],
+  queryFields: [
+    {
+      name: 'name',
+      type: 'string',
+      label: formatMessage({ id: 'name' }),
+    },
+  ],
 });

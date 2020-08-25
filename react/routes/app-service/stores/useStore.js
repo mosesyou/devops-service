@@ -73,6 +73,10 @@ export default function useStore() {
       }
     },
 
+    checkAppService(projectId, id) {
+      return axios.get(`/devops/v1/projects/${projectId}/app_service/check/${id}?active=true`);
+    },
+
     batchCheck(projectId, listCode, listName) {
       return axios.post(`/devops/v1/projects/${projectId}/app_service/batch_check`, JSON.stringify({ listCode, listName }));
     },
@@ -105,14 +109,9 @@ export default function useStore() {
     },
 
     async judgeRole(organizationId, projectId) {
-      const data = [{
-        code: 'devops-service.app-service.create',
-        organizationId,
-        projectId,
-        resourceType: 'project',
-      }];
+      const data = ['choerodon.code.project.develop.app-service.ps.create'];
       try {
-        const res = await axios.post('/base/v1/permissions/checkPermission', JSON.stringify(data));
+        const res = await axios.post(`iam/choerodon/v1/permissions/menus/check-permissions?projectId=${projectId}`, JSON.stringify(data));
         if (handlePromptError(res)) {
           const { approve } = res[0] || {};
           this.setProjectRole(approve);
@@ -161,7 +160,7 @@ export default function useStore() {
       this.setLoading(true);
       const postData = getTablePostData();
       try {
-        const res = await axios.post(`/devops/v1/projects/${projectId}/app_service/page_by_options`, JSON.stringify(postData));
+        const res = await axios.post(`/devops/v1/projects/${projectId}/app_service/page_by_options?checkMember=true`, JSON.stringify(postData));
         if (res && !res.failed) {
           const hasData = res.list && res.list.length;
           this.setHasApp(hasData);

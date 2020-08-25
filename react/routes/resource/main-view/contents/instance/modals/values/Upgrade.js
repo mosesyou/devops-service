@@ -84,11 +84,11 @@ export default class Upgrade extends Component {
 
         if (shouldLoadValue) {
           const { id, parentId } = vo;
-          const [envId] = parentId.split('-');
+          const [envId] = parentId.split('**');
 
           const newIdArr = {
             appInstanceId: id,
-            environmentId: Number(envId),
+            environmentId: envId,
             appId,
             appVersionId: list[0].id,
           };
@@ -129,7 +129,7 @@ export default class Upgrade extends Component {
       },
     } = this.props;
     this.setState({ versionSearchParam: value, versionPageNum: 2 });
-    this.handleLoadVersion(idArr.appId, value, versionId);
+    this.handleLoadVersion(idArr.appId, value, value ? '' : versionId);
   }, 500);
 
   /**
@@ -239,8 +239,8 @@ export default class Upgrade extends Component {
       appServiceVersionId: verId,
       type: 'update',
       instanceId: appInstanceId,
-      environmentId: Number(environmentId),
-      appServiceId: Number(appId),
+      environmentId,
+      appServiceId: appId,
     };
 
     try {

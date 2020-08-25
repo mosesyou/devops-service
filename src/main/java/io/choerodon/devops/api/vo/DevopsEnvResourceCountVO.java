@@ -1,10 +1,14 @@
 package io.choerodon.devops.api.vo;
 
+import org.hzero.starter.keyencrypt.core.Encrypt;
+
 /**
  * 环境的资源的统计数据
+ *
  * @author zmf
  */
 public class DevopsEnvResourceCountVO {
+    @Encrypt
     private Long envId;
 
     private Long instanceCount;
@@ -19,6 +23,8 @@ public class DevopsEnvResourceCountVO {
 
     private Long secretCount;
 
+    private Long customCount;
+
     private Long runningInstanceCount;
 
     private Long operatingInstanceCount;
@@ -26,6 +32,16 @@ public class DevopsEnvResourceCountVO {
     private Long stoppedInstanceCount;
 
     private Long failedInstanceCount;
+
+    private Long pvcCount;
+
+    public Long getPvcCount() {
+        return pvcCount;
+    }
+
+    public void setPvcCount(Long pvcCount) {
+        this.pvcCount = pvcCount;
+    }
 
     public Long getEnvId() {
         return envId;
@@ -89,6 +105,14 @@ public class DevopsEnvResourceCountVO {
 
     public void setRunningInstanceCount(Long runningInstanceCount) {
         this.runningInstanceCount = runningInstanceCount;
+    }
+
+    public Long getCustomCount() {
+        return customCount;
+    }
+
+    public void setCustomCount(Long customCount) {
+        this.customCount = customCount;
     }
 
     public Long getOperatingInstanceCount() {

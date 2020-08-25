@@ -2,6 +2,7 @@ import React, { lazy, Suspense, useEffect } from 'react';
 import { runInAction } from 'mobx';
 import { observer } from 'mobx-react-lite';
 import { Tabs, Spin } from 'choerodon-ui';
+import { Permission } from '@choerodon/boot';
 import { useEnvironmentStore } from './stores';
 import { useResourceStore } from '../../../stores';
 import PageTitle from '../../../../../components/page-title';
@@ -15,6 +16,7 @@ const { TabPane } = Tabs;
 
 const SyncSituation = lazy(() => import('./sync-situation'));
 const Permissions = lazy(() => import('./Permissions'));
+const Polaris = lazy(() => import('./polaris'));
 
 const EnvContent = observer(() => {
   const {
@@ -30,6 +32,7 @@ const EnvContent = observer(() => {
       SYNC_TAB,
       CONFIG_TAB,
       ASSIGN_TAB,
+      POLARIS_TAB,
     },
     envStore,
   } = useEnvironmentStore();
@@ -49,7 +52,8 @@ const EnvContent = observer(() => {
       const name = record.get('name');
       const active = record.get('active');
       const connect = record.get('connect');
-      return { id, name, active, connect };
+      const clusterName = record.get('clusterName');
+      return { id, name, active, connect, clusterName };
     }
     return null;
   }
@@ -81,7 +85,7 @@ const EnvContent = observer(() => {
   function getTitle() {
     const current = getCurrent();
     if (current) {
-      return <EnvItem isTitle name={current.name} connect={current.connect} />;
+      return <EnvItem isTitle name={current.name} connect={current.connect} formatMessage={formatMessage} clusterName={current.clusterName} />;
     }
     return null;
   }
@@ -118,6 +122,14 @@ const EnvContent = observer(() => {
             <Config />
           </Suspense>
         </TabPane>
+        <TabPane
+          key={POLARIS_TAB}
+          tab={formatMessage({ id: `${intlPrefix}.environment.tabs.polaris` })}
+        >
+          <Suspense fallback={<Spin />}>
+            <Polaris />
+          </Suspense>
+        </TabPane>
         {envStore.getPermission && <TabPane
           key={ASSIGN_TAB}
           tab={<Tips
@@ -128,7 +140,7 @@ const EnvContent = observer(() => {
           <Suspense fallback={<Spin />}>
             <Permissions />
           </Suspense>
-        </TabPane>}
+          </TabPane>}
       </Tabs>
       <Modals />
     </div>

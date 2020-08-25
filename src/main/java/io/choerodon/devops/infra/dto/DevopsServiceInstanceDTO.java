@@ -1,22 +1,31 @@
 package io.choerodon.devops.infra.dto;
 
+import io.choerodon.mybatis.annotation.ModifyAudit;
+import io.choerodon.mybatis.annotation.VersionAudit;
+import io.choerodon.mybatis.domain.AuditDomain;
+
 import javax.persistence.GeneratedValue;
 import javax.persistence.GenerationType;
 import javax.persistence.Id;
 import javax.persistence.Table;
 
-import io.choerodon.mybatis.entity.BaseDTO;
-
 /**
  * Created by Zenger on 2018/4/14.
  */
+@ModifyAudit
+@VersionAudit
 @Table(name = "devops_service_instance")
-public class DevopsServiceInstanceDTO extends BaseDTO {
+public class DevopsServiceInstanceDTO extends AuditDomain {
+
+    public static final String ENCRYPT_KEY = "devops_service_instance";
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @GeneratedValue(strategy = GenerationType.AUTO)
+//    @Encrypt(DevopsServiceInstanceDTO.ENCRYPT_KEY)
     private Long id;
+//    @Encrypt(AppServiceDTO.ENCRYPT_KEY)
     private Long serviceId;
+//    @Encrypt(DevopsServiceInstanceDTO.ENCRYPT_KEY)
     private Long instanceId;
     private String code;
 

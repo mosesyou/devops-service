@@ -2,6 +2,8 @@ package io.choerodon.devops.api.vo;
 
 import java.util.Date;
 
+import org.hzero.starter.keyencrypt.core.Encrypt;
+
 /**
  * Creator: Runge
  * Date: 2018/8/9
@@ -9,14 +11,16 @@ import java.util.Date;
  * Description:
  */
 public class DevopsEnvFileErrorVO {
+    @Encrypt
     private Long id;
+    @Encrypt
     private Long envId;
     private String filePath;
     private String fileUrl;
     private String commit;
     private String error;
     private String commitUrl;
-    private Date errorTime;
+    private Date lastUpdateDate;
 
     public Long getId() {
         return id;
@@ -66,12 +70,12 @@ public class DevopsEnvFileErrorVO {
         this.commitUrl = commitUrl;
     }
 
-    public Date getErrorTime() {
-        return errorTime;
+    public Date getLastUpdateDate() {
+        return lastUpdateDate;
     }
 
-    public void setErrorTime(Date errorTime) {
-        this.errorTime = errorTime;
+    public void setLastUpdateDate(Date lastUpdateDate) {
+        this.lastUpdateDate = lastUpdateDate;
     }
 
     public String getFileUrl() {

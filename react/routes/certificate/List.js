@@ -1,4 +1,4 @@
-import React, { useCallback, Fragment } from 'react';
+import React, { useState, useEffect, useCallback, Fragment } from 'react';
 import { Page, Content, Header, Permission, Action, Breadcrumb } from '@choerodon/boot';
 import { Table, Modal } from 'choerodon-ui/pro';
 import { Button } from 'choerodon-ui';
@@ -31,10 +31,6 @@ const AppService = withRouter(observer((props) => {
     prefixCls,
     permissions,
     listDs,
-    allProjectDs,
-    permissionProjectDs,
-    detailDs,
-    optionsDs,
     certStore,
   } = useCertificateStore();
 
@@ -48,7 +44,7 @@ const AppService = withRouter(observer((props) => {
         value={value}
         clickAble
         onClick={() => openModal('edit')}
-        permissionCode={['devops-service.project-certification.createOrUpdate']}
+        permissionCode={['choerodon.code.project.deploy.cluster.cert-management.ps.create']}
       />
     );
   }
@@ -56,12 +52,12 @@ const AppService = withRouter(observer((props) => {
   function renderActions() {
     const actionData = [
       {
-        service: ['devops-service.project-certification.assignPermission'],
+        service: ['choerodon.code.project.deploy.cluster.cert-management.ps.permission'],
         text: formatMessage({ id: `${intlPrefix}.permission` }),
         action: openPermission,
       },
       {
-        service: ['devops-service.project-certification.deleteOrgCert'],
+        service: ['choerodon.code.project.deploy.cluster.cert-management.ps.delete'],
         text: formatMessage({ id: 'delete' }),
         action: handleDelete,
       },
@@ -89,9 +85,6 @@ const AppService = withRouter(observer((props) => {
   }
 
   async function openPermission() {
-    detailDs.transport.read.url = `/devops/v1/projects/${id}/certs/${listDs.current.get('id')}`;
-    await detailDs.query();
-
     Modal.open({
       key: modalKey2,
       style: modalStyle2,
@@ -102,27 +95,12 @@ const AppService = withRouter(observer((props) => {
         title={formatMessage({ id: `${intlPrefix}.permission` })}
       />,
       children: <PermissionManage
-        dataSet={detailDs}
-        record={detailDs.current}
-        allProjectDs={allProjectDs}
-        permissionProjectDs={permissionProjectDs}
-        optionsDs={optionsDs}
-        projectId={id}
         intlPrefix={intlPrefix}
         prefixCls={prefixCls}
         refresh={refresh}
+        certId={listDs.current.get('id')}
       />,
-      onCancel: handleCancel,
     });
-  }
-
-  function handleCancel() {
-    const { current } = listDs;
-    if (current.status === 'add') {
-      listDs.remove(current);
-    } else {
-      current.reset();
-    }
   }
 
   function handleDelete() {
@@ -139,11 +117,11 @@ const AppService = withRouter(observer((props) => {
 
   return (
     <Page
-      service={permissions}
+      service={['choerodon.code.project.deploy.cluster.cert-management.ps.default']}
     >
       <Header title={<FormattedMessage id="app.head" />}>
         <Permission
-          service={['devops-service.project-certification.createOrUpdate']}
+          service={['choerodon.code.project.deploy.cluster.cert-management.ps.create']}
         >
           <Button
             icon="playlist_add"

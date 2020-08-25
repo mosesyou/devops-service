@@ -59,12 +59,28 @@ public enum HelmType {
     GET_TEST_APP_STATUS("get_test_app_status"),
     TEST_STATUS_RESPONSE("test_status_response"),
     TEST_STATUS("test_status"),
-    CERT_MANAGER_INFO("cert_manager_info"),
     TEST_EXECUTE("test_execute"),
     CONFIG_UPDATE("config_update"),
     CERT_MANAGER_INSTALL("cert_manager_install"),
+    CERT_MANAGER_STATUS("cert_manager_status"),
+    CERT_MANAGER_UNINSTALL("cert_manager_uninstall"),
+    CRD_UNLOAD("crd_unload"),
+    CRD_UNLOAD_STATUS("crd_unload_status"),
+    CHART_MUSEUM_AUTHENTICATION("chart_museum_authentication"),
     OPERATE_DOCKER_REGISTRY_SECRET_FAILED("operate_docker_registry_secret_failed"),
     OPERATE_DOCKER_REGISTRY_SECRET("operate_docker_registry_secret"),
+    /**
+     * 删除pod，由DevOps服务发到agent
+     */
+    DELETE_POD("delete_pod"),
+    /**
+     * agent启动时将集群的基本信息发送过来，如版本，namespace数量等
+     */
+    CLUSTER_INFO("cluster_info"),
+    /**
+     * polaris扫描集群或集群的某个namespace
+     */
+    POLARIS_SCAN_CLUSTER("polaris_scan_cluster"),
     POD_METRICS_SYNC("pod_metrics_sync"),
     NODE_SYNC("node_sync");
 

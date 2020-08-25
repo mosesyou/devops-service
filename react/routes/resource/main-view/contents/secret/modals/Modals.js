@@ -7,7 +7,7 @@ import HeaderButtons from '../../../../../../components/header-buttons';
 import { useResourceStore } from '../../../../stores';
 import { useModalStore } from './stores';
 import { useKeyValueStore } from '../stores';
-import KeyValueModal from '../../application/modals/key-value';
+import KeyValueModal from '../../application/modals/key-value/KeyValueProIndex';
 
 const modalKey = Modal.key();
 const modalStyle = {
@@ -60,6 +60,7 @@ const KeyValueModals = observer(() => {
     const disabled = !connect;
 
     return ([{
+      permissions: ['choerodon.code.project.deploy.app-deployment.resource.ps.cipher'],
       name: formatMessage({ id: `${intlPrefix}.create.cipher` }),
       icon: 'playlist_add',
       handler: openModal,

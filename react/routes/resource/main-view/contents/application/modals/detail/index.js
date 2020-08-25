@@ -1,10 +1,12 @@
 import React from 'react';
 import { FormattedMessage } from 'react-intl';
+import { Tooltip } from 'choerodon-ui';
 
 import './index.less';
 
-
-export default function ({ intlPrefix, record, prefixCls, formatMessage }) {
+export default function ({
+  intlPrefix, record, prefixCls, formatMessage,
+}) {
   let status;
   if (record.get('fail')) {
     status = 'failed';
@@ -32,16 +34,24 @@ export default function ({ intlPrefix, record, prefixCls, formatMessage }) {
       </li>
       <li className="detail-item detail-item-has-url">
         <span className="detail-item-text">
-          {formatMessage({ id: `${intlPrefix}.service.url` })}
+          {record.get('shareProjectName') ? '来源项目' : formatMessage({ id: `${intlPrefix}.service.url` })}
         </span>
-        <a
-          href={record.get('repoUrl')}
-          className="detail-item-url"
-          target="_blank"
-          rel="nofollow me noopener noreferrer"
-        >
-          <span>{record.get('repoUrl')}</span>
-        </a>
+        <Tooltip title={record.get('repoUrl')}>
+          {
+            record.get('shareProjectName') ? (
+              <span>{record.get('shareProjectName')}</span>
+            ) : (
+              <a
+                href={record.get('repoUrl')}
+                className="detail-item-url"
+                target="_blank"
+                rel="nofollow me noopener noreferrer"
+              >
+                <span>{record.get('repoUrl')}</span>
+              </a>
+            )
+          }
+        </Tooltip>
       </li>
     </ul>
   );

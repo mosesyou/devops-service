@@ -2,13 +2,17 @@ package io.choerodon.devops.app.service.impl;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
 import io.choerodon.devops.app.service.DevopsEnvFileResourceService;
 import io.choerodon.devops.infra.dto.DevopsEnvFileResourceDTO;
 import io.choerodon.devops.infra.mapper.DevopsEnvFileResourceMapper;
+import io.choerodon.devops.infra.util.MapperUtil;
 import io.choerodon.devops.infra.util.TypeUtil;
 
 @Service
@@ -42,8 +46,7 @@ public class DevopsEnvFileResourceServiceImpl implements DevopsEnvFileResourceSe
 
     @Override
     public DevopsEnvFileResourceDTO baseCreate(DevopsEnvFileResourceDTO devopsEnvFileResourceDTO) {
-        devopsEnvFileResourceMapper.insert(devopsEnvFileResourceDTO);
-        return devopsEnvFileResourceDTO;
+        return MapperUtil.resultJudgedInsert(devopsEnvFileResourceMapper, devopsEnvFileResourceDTO, "error.insert.env.file.resource");
     }
 
     @Override
@@ -85,6 +88,14 @@ public class DevopsEnvFileResourceServiceImpl implements DevopsEnvFileResourceSe
         devopsEnvFileResourceDTO.setEnvId(envId);
         devopsEnvFileResourceDTO.setResourceId(resourceId);
         devopsEnvFileResourceDTO.setResourceType(resourceType);
+        devopsEnvFileResourceMapper.delete(devopsEnvFileResourceDTO);
+    }
+
+    @Transactional(propagation = Propagation.REQUIRED, rollbackFor = Exception.class)
+    @Override
+    public void deleteByEnvId(Long envId) {
+        DevopsEnvFileResourceDTO devopsEnvFileResourceDTO = new DevopsEnvFileResourceDTO();
+        devopsEnvFileResourceDTO.setEnvId(Objects.requireNonNull(envId));
         devopsEnvFileResourceMapper.delete(devopsEnvFileResourceDTO);
     }
 }

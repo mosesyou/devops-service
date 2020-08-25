@@ -1,78 +1,84 @@
 package io.choerodon.devops.app.service.impl;
 
+import java.time.LocalDate;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.stream.Collectors;
 
-import com.github.pagehelper.PageHelper;
-import com.github.pagehelper.PageInfo;
-import com.google.common.base.Joiner;
-import io.choerodon.devops.infra.dto.iam.ProjectDTO;
-import io.choerodon.devops.infra.util.GitUserNameUtil;
-import org.springframework.beans.BeanUtils;
+import io.choerodon.devops.infra.util.KeyDecryptHelper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.CollectionUtils;
 
-import io.choerodon.base.domain.PageRequest;
+import io.choerodon.core.domain.Page;
 import io.choerodon.core.exception.CommonException;
+import io.choerodon.devops.api.vo.AppServiceInstanceForRecordVO;
+import io.choerodon.devops.api.vo.DeployRecordCountVO;
 import io.choerodon.devops.api.vo.DevopsDeployRecordVO;
 import io.choerodon.devops.app.service.DevopsDeployRecordService;
-import io.choerodon.devops.app.service.DevopsEnvironmentService;
+import io.choerodon.devops.app.service.PermissionHelper;
 import io.choerodon.devops.app.service.PipelineService;
 import io.choerodon.devops.infra.dto.DevopsDeployRecordDTO;
-import io.choerodon.devops.infra.dto.DevopsEnvironmentDTO;
+import io.choerodon.devops.infra.dto.DevopsDeployRecordInstanceDTO;
 import io.choerodon.devops.infra.dto.iam.IamUserDTO;
+import io.choerodon.devops.infra.enums.DeployType;
 import io.choerodon.devops.infra.feign.operator.BaseServiceClientOperator;
+import io.choerodon.devops.infra.mapper.DevopsDeployRecordInstanceMapper;
 import io.choerodon.devops.infra.mapper.DevopsDeployRecordMapper;
 import io.choerodon.devops.infra.util.ConvertUtils;
 import io.choerodon.devops.infra.util.PageRequestUtil;
 import io.choerodon.devops.infra.util.TypeUtil;
+import io.choerodon.mybatis.pagehelper.PageHelper;
+import io.choerodon.mybatis.pagehelper.domain.PageRequest;
 
 /**
  * Created by Sheep on 2019/7/29.
  */
 @Service
 public class DevopsDeployRecordServiceImpl implements DevopsDeployRecordService {
-    private static final String COMMA = ",";
     private static final String DEPLOY_STATUS = "deployStatus";
     private static final String DEPLOY_TYPE = "deployType";
+    private static final String PIPELINE_ID = "pipelineId";
     private static final String RUNNING = "running";
-    private static final String MANUAL = "manual";
-
 
     @Autowired
     private DevopsDeployRecordMapper devopsDeployRecordMapper;
     @Autowired
-    private DevopsEnvironmentService devopsEnvironmentService;
-    @Autowired
     private BaseServiceClientOperator baseServiceClientOperator;
     @Autowired
     private PipelineService pipelineService;
+    @Autowired
+    private PermissionHelper permissionHelper;
+    @Autowired
+    private DevopsDeployRecordInstanceMapper devopsDeployRecordInstanceMapper;
 
     @Override
-    public PageInfo<DevopsDeployRecordVO> pageByProjectId(Long projectId, String params, PageRequest pageRequest) {
-        ProjectDTO projectDTO = baseServiceClientOperator.queryIamProjectById(projectId);
-        Boolean projectOwner = baseServiceClientOperator.isProjectOwner(TypeUtil.objToLong(GitUserNameUtil.getUserId()), projectDTO);
+    public Page<DevopsDeployRecordVO> pageByProjectId(Long projectId, String params, PageRequest pageable) {
+        Boolean projectOwnerOrRoot = permissionHelper.isGitlabProjectOwnerOrGitlabAdmin(projectId);
 
-        PageInfo<DevopsDeployRecordDTO> devopsDeployRecordDTOPageInfo = basePageByProjectId(projectId, params, pageRequest);
+        Page<DevopsDeployRecordDTO> devopsDeployRecordDTOPageInfo = basePageByProjectId(projectId, params, pageable);
 
-        PageInfo<DevopsDeployRecordVO> devopsDeployRecordVOPageInfo = ConvertUtils.convertPage(devopsDeployRecordDTOPageInfo, DevopsDeployRecordVO.class);
+        Page<DevopsDeployRecordVO> devopsDeployRecordVOPageInfo = ConvertUtils.convertPage(devopsDeployRecordDTOPageInfo, DevopsDeployRecordVO.class);
 
         //查询用户信息
-        List<Long> userIds = devopsDeployRecordVOPageInfo.getList().stream().map(DevopsDeployRecordVO::getDeployCreatedBy).collect(Collectors.toList());
-        Map<Long, IamUserDTO> userMap = new HashMap<>(pageRequest.getSize());
+        List<Long> userIds = devopsDeployRecordVOPageInfo.getContent().stream().map(DevopsDeployRecordVO::getDeployCreatedBy).collect(Collectors.toList());
+        Map<Long, IamUserDTO> userMap = new HashMap<>(pageable.getSize());
         baseServiceClientOperator.listUsersByIds(userIds).forEach(user -> userMap.put(user.getId(), user));
 
         //设置环境信息以及用户信息
-        devopsDeployRecordVOPageInfo.getList().forEach(devopsDeployRecordVO -> {
+        devopsDeployRecordVOPageInfo.getContent().forEach(devopsDeployRecordVO -> {
             if (devopsDeployRecordVO.getDeployType().equals("auto") && !devopsDeployRecordVO.getDeployStatus().equals("success")) {
-                pipelineService.setPipelineRecordDetail(projectOwner, devopsDeployRecordVO);
+                pipelineService.setPipelineRecordDetail(projectOwnerOrRoot, devopsDeployRecordVO);
             }
             if (userMap.containsKey(devopsDeployRecordVO.getDeployCreatedBy())) {
                 IamUserDTO targetUser = userMap.get(devopsDeployRecordVO.getDeployCreatedBy());
                 devopsDeployRecordVO.setUserName(targetUser.getRealName());
-                if(targetUser.getLdap()) {
+                if (targetUser.getLdap()) {
                     devopsDeployRecordVO.setUserLoginName(targetUser.getLoginName());
-                }else {
+                } else {
                     devopsDeployRecordVO.setUserLoginName(targetUser.getEmail());
                 }
                 devopsDeployRecordVO.setUserImage(targetUser.getImageUrl());
@@ -83,31 +89,49 @@ public class DevopsDeployRecordServiceImpl implements DevopsDeployRecordService 
 
 
     @Override
-    public PageInfo<DevopsDeployRecordDTO> basePageByProjectId(Long projectId, String params, PageRequest pageRequest) {
+    public Page<DevopsDeployRecordDTO> basePageByProjectId(Long projectId, String params, PageRequest pageable) {
         Map<String, Object> maps = TypeUtil.castMapParams(params);
         Map<String, Object> cast = TypeUtil.cast(maps.get(TypeUtil.SEARCH_PARAM));
         if (cast.get(DEPLOY_TYPE) != null && cast.get(DEPLOY_STATUS) != null) {
-            if (MANUAL.equals(cast.get(DEPLOY_TYPE)) && RUNNING.equals(cast.get(DEPLOY_STATUS))) {
+            if (DeployType.MANUAL.getType().equals(cast.get(DEPLOY_TYPE)) && RUNNING.equals(cast.get(DEPLOY_STATUS))) {
                 cast.put(DEPLOY_STATUS, "operating");
-            } else if ("auto".equals(cast.get(DEPLOY_TYPE)) && RUNNING.equals(cast.get(DEPLOY_STATUS))) {
+            } else if (DeployType.AUTO.getType().equals(cast.get(DEPLOY_TYPE)) && RUNNING.equals(cast.get(DEPLOY_STATUS))) {
                 cast.put(DEPLOY_STATUS, RUNNING);
             }
         }
+        Object pipelineId = cast.get(PIPELINE_ID);
+        if (pipelineId instanceof String) {
+            // 解密流水线id
+            cast.put(PIPELINE_ID, Long.valueOf(KeyDecryptHelper.decryptValueOrIgnore((String)pipelineId)));
+        }
         maps.put(TypeUtil.SEARCH_PARAM, cast);
-        return PageHelper.startPage(pageRequest.getPage(), pageRequest.getSize(), PageRequestUtil.getOrderBy(pageRequest)).doSelectPageInfo(
-                () -> devopsDeployRecordMapper.listByProjectId(projectId,
-                        TypeUtil.cast(maps.get(TypeUtil.PARAMS)),
-                        TypeUtil.cast(maps.get(TypeUtil.SEARCH_PARAM))
-                )
-        );
+
+        return PageHelper.doPageAndSort(PageRequestUtil.simpleConvertSortForPage(pageable), () -> devopsDeployRecordMapper.listByProjectId(projectId,
+                TypeUtil.cast(maps.get(TypeUtil.PARAMS)),
+                TypeUtil.cast(maps.get(TypeUtil.SEARCH_PARAM))
+        ));
     }
 
 
     @Override
     public void baseCreate(DevopsDeployRecordDTO devopsDeployRecordDTO) {
+        Objects.requireNonNull(devopsDeployRecordDTO.getDeployTime(), "Deploy time can't be null");
         if (devopsDeployRecordMapper.insert(devopsDeployRecordDTO) != 1) {
             throw new CommonException("error.deploy.record.insert");
         }
+    }
+
+    @Transactional(rollbackFor = Exception.class, propagation = Propagation.REQUIRED)
+    @Override
+    public void createRecordForBatchDeployment(Long projectId, Long envId, List<DevopsDeployRecordInstanceDTO> instances) {
+        if (CollectionUtils.isEmpty(instances)) {
+            throw new CommonException("error.instances.empty");
+        }
+        DevopsDeployRecordDTO devopsDeployRecordDTO = new DevopsDeployRecordDTO(projectId, DeployType.BATCH.getType(), null, String.valueOf(envId), new Date());
+        baseCreate(devopsDeployRecordDTO);
+        Long deployRecordId = devopsDeployRecordDTO.getId();
+        instances.forEach(i -> i.setDeployRecordId(deployRecordId));
+        devopsDeployRecordInstanceMapper.batchInsert(instances);
     }
 
     @Override
@@ -115,17 +139,73 @@ public class DevopsDeployRecordServiceImpl implements DevopsDeployRecordService 
         devopsDeployRecordMapper.delete(devopsDeployRecordDTO);
     }
 
+    @Transactional(rollbackFor = Exception.class, propagation = Propagation.REQUIRED)
     @Override
-    public void deleteManualRecordByEnv(Long envId) {
+    public void deleteManualAndBatchRecordByEnv(Long envId) {
         DevopsDeployRecordDTO deleteCondition = new DevopsDeployRecordDTO();
+        // 删除手动部署的纪录
         deleteCondition.setEnv(String.valueOf(envId));
-        deleteCondition.setDeployType("manual");
-
+        deleteCondition.setDeployType(DeployType.MANUAL.getType());
         devopsDeployRecordMapper.delete(deleteCondition);
+
+        // 删除关联表
+        List<Long> batchRecordIds = devopsDeployRecordMapper.queryRecordIdByEnvIdAndDeployType(String.valueOf(envId), DeployType.BATCH.getType());
+        deleteRecordInstanceByRecordIds(batchRecordIds);
+
+        // 删除批量部署的纪录
+        deleteCondition.setEnv(String.valueOf(envId));
+        deleteCondition.setDeployType(DeployType.BATCH.getType());
+        devopsDeployRecordMapper.delete(deleteCondition);
+    }
+
+    @Transactional(rollbackFor = Exception.class, propagation = Propagation.REQUIRED)
+    @Override
+    public void deleteRecordInstanceByRecordIds(List<Long> recordIds) {
+        if (CollectionUtils.isEmpty(recordIds)) {
+            return;
+        }
+        devopsDeployRecordInstanceMapper.deleteRecordInstanceByRecordIds(recordIds);
     }
 
     @Override
     public void deleteRelatedRecordOfInstance(Long instanceId) {
         devopsDeployRecordMapper.deleteRelatedRecordOfInstance(instanceId);
+    }
+
+    @Override
+    public DeployRecordCountVO countByDate(Long projectId, Date startTime, Date endTime) {
+        DeployRecordCountVO deployRecordCountVO = new DeployRecordCountVO();
+        deployRecordCountVO.setId(projectId);
+
+        List<DevopsDeployRecordDTO> devopsDeployRecordDTOList = devopsDeployRecordMapper.selectByProjectIdAndDate(projectId,
+                new java.sql.Date(startTime.getTime()),
+                new java.sql.Date(endTime.getTime()));
+        // 按日期分组
+        Map<String, List<DevopsDeployRecordDTO>> map = devopsDeployRecordDTOList.stream()
+                .collect(Collectors.groupingBy(t -> new java.sql.Date(t.getDeployTime().getTime()).toString()));
+
+        ZoneId zoneId = ZoneId.systemDefault();
+        LocalDate startDate = startTime.toInstant().atZone(zoneId).toLocalDate();
+        LocalDate endDate = endTime.toInstant().atZone(zoneId).toLocalDate();
+
+        while (startDate.isBefore(endDate) || startDate.isEqual(endDate)) {
+            String date = startDate.format(DateTimeFormatter.ofPattern("yyyy-MM-dd"));
+            long countNum = 0;
+            // 计算成功发送的邮件数
+            List<DevopsDeployRecordDTO> devopsDeployRecordDTOS = map.get(date);
+            if (!CollectionUtils.isEmpty(devopsDeployRecordDTOS)) {
+                countNum = devopsDeployRecordDTOS.size();
+            }
+
+            deployRecordCountVO.getData().add(countNum);
+            startDate = startDate.plusDays(1);
+        }
+        return deployRecordCountVO;
+    }
+
+    @Override
+    public List<AppServiceInstanceForRecordVO> queryByBatchDeployRecordId(Long recordId) {
+        // 这里不校验recordId是不是批量部署类型的部署纪录的id
+        return devopsDeployRecordMapper.queryByBatchDeployRecordId(recordId);
     }
 }

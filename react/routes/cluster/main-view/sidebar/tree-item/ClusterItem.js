@@ -2,7 +2,7 @@ import React, { Fragment, useMemo } from 'react';
 import PropTypes from 'prop-types';
 import { injectIntl, FormattedMessage } from 'react-intl';
 import { Action, Choerodon } from '@choerodon/boot';
-import { Modal, Icon } from 'choerodon-ui/pro';
+import { Modal, Icon, Spin } from 'choerodon-ui/pro';
 import { Input } from 'choerodon-ui';
 import { useClusterStore } from '../../../stores';
 import { useClusterMainStore } from '../../stores';
@@ -32,10 +32,7 @@ function ClusterItem({
 
   function getStatus() {
     const connect = record.get('connect');
-    const upgrade = record.get('upgrade');
-    if (upgrade) {
-      return ['disconnect'];
-    } else if (connect) {
+    if (connect) {
       return ['running', 'connect'];
     }
     return ['disconnect'];
@@ -45,40 +42,65 @@ function ClusterItem({
     treeDs.query();
   }
 
-  function deleteItem() {
+  async function deleteItem() {
     const code = record.get('code');
     const clusterName = record.get('name');
-    const modalContent = (
-      <div>
-        <FormattedMessage id="cluster.delDes_1" />
-        <div
-          className={`${prefixCls}-delete-input`}
-        >
-          <Input
-            value={`helm del choerodon-cluster-agent-code ${code || ''} --purge`}
-            readOnly
-            copy
-          />
-        </div>
-        <div className={`${prefixCls}-delete-notice`}>
-          <Icon type="error" /><FormattedMessage id="cluster.delDes_2" />
-        </div>
-      </div>
-    );
-    mainStore.deleteCheck(projectId, record.get('id'))
-      .then(data => {
-        if (data && data.failed) {
-          Choerodon.prompt(data.message);
-        } else {
-          Modal.open({
-            key: deleteModalKey,
-            title: formatMessage({ id: `${intlPrefix}.action.delete.title` }, { name: clusterName }),
-            children: modalContent,
-            onOk: handleDelete,
-            okText: formatMessage({ id: 'cluster.del.confirm' }),
-          });
-        }
+    const deleteModal = Modal.open({
+      key: deleteModalKey,
+      title: formatMessage({ id: `${intlPrefix}.action.delete.title` }, { name: clusterName }),
+      children: <Spin />,
+      footer: null,
+    });
+    const res = await mainStore.deleteCheck(projectId, record.get('id'));
+    if (res && (res.checkEnv || res.checkPV)) {
+      let message = '';
+      if (res.checkPV) {
+        message = formatMessage({ id: 'c7ncd.cluster.action.can\'t.delete.pv' });
+      }
+      if (res.checkEnv) {
+        message = formatMessage({ id: 'c7ncd.cluster.action.can\'t.delete.env' });
+      }
+      deleteModal.update({
+        title: formatMessage({ id: 'c7ncd.cluster.action.can\'t.delete' }),
+        children: message,
+        okText: formatMessage({ id: 'iknow' }),
+        footer: ((okBtn, cancelBtn) => (
+          <Fragment>
+            {okBtn}
+          </Fragment>
+        )),
       });
+    } else {
+      const modalContent = (
+        <div>
+          <FormattedMessage id="cluster.delDes_1" />
+          <div
+            className={`${prefixCls}-delete-input`}
+          >
+            <Input
+              value={`helm del choerodon-cluster-agent-${code || ''} --purge`}
+              readOnly
+              copy
+            />
+          </div>
+          <div className={`${prefixCls}-delete-notice`}>
+            <Icon type="error" /><FormattedMessage id="cluster.delDes_2" />
+          </div>
+        </div>
+      );
+      deleteModal.update({
+        children: modalContent,
+        onOk: handleDelete,
+        okCancel: true,
+        footer: ((okBtn, cancelBtn) => (
+          <Fragment>
+            {okBtn}{cancelBtn}
+          </Fragment>
+        )),
+        okText: formatMessage({ id: 'cluster.del.confirm' }),
+        okProps: { color: 'red' },
+      });
+    }
   }
 
   async function handleDelete() {
@@ -86,6 +108,7 @@ function ClusterItem({
       const res = await mainStore.deleteCluster({ projectId, clusterId: record.get('id') });
       if (handlePromptError(res, false)) {
         freshMenu();
+        mainStore.checkCreate(projectId);
       } else {
         return false;
       }
@@ -99,7 +122,6 @@ function ClusterItem({
     Modal.open({
       key: EditClusterModalKey,
       title: formatMessage({ id: `${intlPrefix}.modal.edit` }),
-      // children: <EditCluster isEdit clusterId={record.data.id} record={res || ClusterDetailDs.current} mainStore={mainStore} afterOk={freshMenu} intlPrefix={intlPrefix} formatMessage={formatMessage} treeItemStore={treeItemStore} projectId={projectId} />,
       children: <EditCluster isEdit clusterId={record.data.id} mainStore={mainStore} afterOk={freshMenu} intlPrefix={intlPrefix} formatMessage={formatMessage} treeItemStore={treeItemStore} projectId={projectId} />,
       drawer: true,
       style: {
@@ -110,8 +132,6 @@ function ClusterItem({
   }
 
   async function editItem() {
-    // const res = await treeItemStore.queryClusterDetail(projectId, record.data.id);
-    // openEdit(res);
     openEdit();
   }
 
@@ -140,23 +160,24 @@ function ClusterItem({
   const getSuffix = useMemo(() => {
     const [status] = getStatus();
     const Data = [{
-      service: ['devops-service.devops-cluster.update'],
+      service: ['choerodon.code.project.deploy.cluster.cluster-management.ps.edit'],
       text: formatMessage({ id: `${intlPrefix}.action.edit` }),
       action: editItem,
     }];
     if (status === 'disconnect') {
-      Data.push({
-        service: ['devops-service.devops-cluster.queryShell'],
+      Data.unshift({
+        service: ['choerodon.code.project.deploy.cluster.cluster-management.ps.active'],
         text: formatMessage({ id: `${intlPrefix}.activate.header` }),
         action: activateItem,
-      }, {
-        service: ['devops-service.devops-cluster.deleteCluster'],
+      });
+      Data.push({
+        service: ['choerodon.code.project.deploy.cluster.cluster-management.ps.delete'],
         text: formatMessage({ id: `${intlPrefix}.action.delete` }),
         action: deleteItem,
       });
     }
     return <Action placement="bottomRight" data={Data} />;
-  }, []);
+  }, [record]);
 
   const clearClick = (e) => {
     e.stopPropagation();

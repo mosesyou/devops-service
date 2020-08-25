@@ -1,13 +1,12 @@
 package io.choerodon.devops.app.service;
 
-import java.util.List;
-
-import com.github.pagehelper.PageInfo;
-
-import io.choerodon.base.domain.PageRequest;
+import io.choerodon.core.domain.Page;
 import io.choerodon.devops.api.vo.*;
 import io.choerodon.devops.app.eventhandler.payload.BranchSagaPayLoad;
 import io.choerodon.devops.infra.dto.gitlab.BranchDTO;
+import io.choerodon.mybatis.pagehelper.domain.PageRequest;
+
+import java.util.List;
 
 
 /**
@@ -73,11 +72,11 @@ public interface DevopsGitService {
      *
      * @param projectId    项目 ID
      * @param appServiceId 应用服务ID
-     * @param pageRequest  分页参数
+     * @param pageable     分页参数
      * @param params       search param
      * @return Page
      */
-    PageInfo<BranchVO> pageBranchByOptions(Long projectId, PageRequest pageRequest, Long appServiceId, String params);
+    Page<BranchVO> pageBranchByOptions(Long projectId, PageRequest pageable, Long appServiceId, String params);
 
     /**
      * 查询单个分支
@@ -101,10 +100,11 @@ public interface DevopsGitService {
     /**
      * 删除分支
      *
+     * @param projectId    项目id
      * @param appServiceId 应用服务ID
      * @param branchName   分支名
      */
-    void deleteBranch(Long appServiceId, String branchName);
+    void deleteBranch(Long projectId, Long appServiceId, String branchName);
 
     /**
      * 校验分支名唯一性
@@ -116,15 +116,25 @@ public interface DevopsGitService {
     void checkBranchName(Long projectId, Long applicationId, String branchName);
 
     /**
+     * 判断分支名唯一性
+     *
+     * @param projectId     项目id
+     * @param applicationId 应用id
+     * @param branchName    分支名
+     * @return true表示通过
+     */
+    Boolean isBranchNameUnique(Long projectId, Long applicationId, String branchName);
+
+    /**
      * 查看所有合并请求
      *
      * @param projectId
      * @param appServiceId
      * @param state
-     * @param pageRequest
+     * @param pageable
      * @return
      */
-    MergeRequestTotalVO listMergeRequest(Long projectId, Long appServiceId, String state, PageRequest pageRequest);
+    MergeRequestTotalVO listMergeRequest(Long projectId, Long appServiceId, String state, PageRequest pageable);
 
     /**
      * 分页获取标签列表
@@ -136,7 +146,7 @@ public interface DevopsGitService {
      * @param size
      * @return
      */
-    PageInfo<TagVO> pageTagsByOptions(Long projectId, Long applicationId, String params, Integer page, Integer size);
+    Page<TagVO> pageTagsByOptions(Long projectId, Long applicationId, String params, Integer page, Integer size);
 
     /**
      * 获取标签列表

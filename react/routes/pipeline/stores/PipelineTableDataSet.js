@@ -29,10 +29,11 @@ export default (formatMessage, PiplineStore, projectId, searchDS, envIdDS, trigg
     { name: 'name', type: 'string', label: formatMessage({ id: 'name' }) },
     { name: 'createUserRealName', type: 'string', label: formatMessage({ id: 'creator' }) },
     { name: 'lastUpdateDate', type: 'string', label: formatMessage({ id: 'updateDate' }) },
+    { name: 'envName', type: 'string', label: formatMessage({ id: 'pipeline.deploy.env' }) },
   ],
   queryFields: [
     { name: 'search', type: 'string', textField: 'text', valueField: 'value', label: formatMessage({ id: 'pipeline.search' }), options: searchDS, multiple: true },
-    { name: 'envId', type: 'number', textField: 'name', valueField: 'id', label: formatMessage({ id: 'pipeline.deploy.env' }), options: envIdDS },
+    { name: 'envId', type: 'string', textField: 'name', valueField: 'id', label: formatMessage({ id: 'pipeline.deploy.env' }), options: envIdDS },
     { name: 'triggerType', type: 'string', textField: 'text', valueField: 'value', label: formatMessage({ id: 'pipeline.trigger' }), options: triggerTypeDs },
   ],
 });

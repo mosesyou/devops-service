@@ -1,22 +1,23 @@
 package io.choerodon.devops.app.service.impl;
 
 import java.util.List;
+import java.util.Objects;
 
-import com.github.pagehelper.PageHelper;
-import com.github.pagehelper.PageInfo;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
-import io.choerodon.base.domain.PageRequest;
+import io.choerodon.core.domain.Page;
 import io.choerodon.core.exception.CommonException;
 import io.choerodon.devops.api.vo.DevopsEnvFileErrorVO;
 import io.choerodon.devops.app.service.DevopsEnvFileErrorService;
 import io.choerodon.devops.infra.dto.DevopsEnvFileErrorDTO;
 import io.choerodon.devops.infra.mapper.DevopsEnvFileErrorMapper;
 import io.choerodon.devops.infra.util.PageRequestUtil;
+import io.choerodon.mybatis.pagehelper.PageHelper;
+import io.choerodon.mybatis.pagehelper.domain.PageRequest;
 
 /**
  * Creator: ChangpingShi0213@gmail.com
@@ -55,11 +56,10 @@ public class DevopsEnvFileErrorServiceImpl implements DevopsEnvFileErrorService 
     }
 
     @Override
-    public PageInfo<DevopsEnvFileErrorDTO> basePageByEnvId(Long envId, PageRequest pageRequest) {
+    public Page<DevopsEnvFileErrorDTO> basePageByEnvId(Long envId, PageRequest pageable) {
         DevopsEnvFileErrorDTO devopsEnvFileErrorDTO = new DevopsEnvFileErrorDTO();
         devopsEnvFileErrorDTO.setEnvId(envId);
-        return PageHelper.startPage(pageRequest.getPage(), pageRequest.getSize(),
-                PageRequestUtil.getOrderBy(pageRequest)).doSelectPageInfo(() -> devopsEnvFileErrorMapper.select(devopsEnvFileErrorDTO));
+        return PageHelper.doPageAndSort(PageRequestUtil.simpleConvertSortForPage(pageable), () -> devopsEnvFileErrorMapper.select(devopsEnvFileErrorDTO));
     }
 
 
@@ -81,5 +81,13 @@ public class DevopsEnvFileErrorServiceImpl implements DevopsEnvFileErrorService 
         DevopsEnvFileErrorDTO devopsEnvFileErrorDTO = new DevopsEnvFileErrorDTO();
         BeanUtils.copyProperties(devopsEnvFileErrorVO, devopsEnvFileErrorDTO);
         devopsEnvFileErrorMapper.insert(devopsEnvFileErrorDTO);
+    }
+
+    @Transactional(propagation = Propagation.REQUIRED, rollbackFor = Exception.class)
+    @Override
+    public void deleteByEnvId(Long envId) {
+        DevopsEnvFileErrorDTO devopsEnvFileErrorDO = new DevopsEnvFileErrorDTO();
+        devopsEnvFileErrorDO.setEnvId(Objects.requireNonNull(envId));
+        devopsEnvFileErrorMapper.delete(devopsEnvFileErrorDO);
     }
 }

@@ -1,5 +1,8 @@
 package io.choerodon.devops.api.vo;
 
+import io.swagger.annotations.ApiModelProperty;
+import org.hzero.starter.keyencrypt.core.Encrypt;
+
 import io.choerodon.devops.infra.enums.EnvironmentGitopsStatus;
 
 /**
@@ -8,18 +11,22 @@ import io.choerodon.devops.infra.enums.EnvironmentGitopsStatus;
  * @author zmf
  */
 public class DevopsEnvironmentInfoVO {
+    @Encrypt
     private Long id;
     private String code;
     private String name;
     private Boolean connect;
     private Boolean synchronize;
+    @Encrypt
     private Long clusterId;
     private String clusterName;
     private Boolean skipCheckPermission;
     private String description;
     private Long objectVersionNumber;
     private Boolean active;
-    private Boolean failed;
+    @ApiModelProperty("环境是否失败")
+    private Boolean fail;
+    @Encrypt
     private Long groupId;
     private String gitlabUrl;
     /**
@@ -27,12 +34,12 @@ public class DevopsEnvironmentInfoVO {
      */
     private String gitopsStatus;
 
-    public Boolean getFailed() {
-        return failed;
+    public Boolean getFail() {
+        return fail;
     }
 
-    public void setFailed(Boolean failed) {
-        this.failed = failed;
+    public void setFail(Boolean fail) {
+        this.fail = fail;
     }
 
     public Long getGroupId() {

@@ -8,6 +8,7 @@ import { Permission, Content, Header, Page, Action, Breadcrumb, Choerodon } from
 import { usePiplineStore } from './stores';
 import { handlePromptError } from '../../utils';
 
+import checkPermission from '../../utils/checkPermission';
 import pipelineCreateStore from './stores/PipelineCreateStore';
 import PipelineCreate from './pipeline-create';
 import PipelineEdit from './pipeline-edit';
@@ -36,12 +37,22 @@ const PiplelineTable = withRouter(observer((props) => {
     location: { search },
   } = usePiplineStore();
 
+  const [canDetail, setCanDetail] = useState(false);
+
+  useEffect(() => {
+    async function init() {
+      const res = await checkPermission({ projectId, code: 'choerodon.code.project.deploy.app-deployment.pipeline.ps.pipeline-detail' });
+      setCanDetail(res);
+    }
+    init();
+  }, []);
+
   function handleRefresh() {
     piplineDS.query();
   }
   /**
    * 跳转到部署页面
-   * @param {*} id 
+   * @param {*} id
    */
   function linkToRecord(id) {
     history.push({
@@ -83,8 +94,8 @@ const PiplelineTable = withRouter(observer((props) => {
   }
   /**
    * 打开删除模态框
-   * @param {*} id 
-   * @param {*} itemName 
+   * @param {*} id
+   * @param {*} itemName
    */
   function deletePipeline(id, itemName) {
     Modal.open({
@@ -92,14 +103,20 @@ const PiplelineTable = withRouter(observer((props) => {
       title: `${formatMessage({ id: 'pipeline.invalid' })}“${itemName}”`,
       children: '确认要删除吗？',
       okText: formatMessage({ id: 'delete' }),
+      okProps: {
+        color: 'red',
+      },
+      cancelProps: {
+        color: 'dark',
+      },
       onOk: handleDelete.bind(this, id, itemName),
     });
   }
 
   /**
    * 打开invalid模态框
-   * @param {*} id 
-   * @param {*} itemName 
+   * @param {*} id
+   * @param {*} itemName
    */
   function openInvalid(id, itemName) {
     invalidModal = Modal.open({
@@ -113,22 +130,7 @@ const PiplelineTable = withRouter(observer((props) => {
       cancelText: <FormattedMessage id="cancel" />,
     });
   }
-  /**
-   * 打开execute模态框
-   * @param {*} id 
-   * @param {*} itemName 
-   */
-  async function openExecuteCheck(id, itemName) {
-    Modal.open({
-      key: modalKey,
-      title: `${formatMessage({ id: 'pipeline.execute' })}“${itemName}”`,
-      // footer: null,
-      okCancel: false,
-      onOk: () => { true; },
-      okText: <FormattedMessage id="close" />,
-      children: <ExecuteModalContent id={id} />,
-    });
-  }
+
   /**
    * 打开编辑页面
    * @param id
@@ -137,7 +139,7 @@ const PiplelineTable = withRouter(observer((props) => {
     pipelineCreateStore.setEditId(id);
     const result = await pipelineCreateStore.loadDetail(projectId, id);
     if (result) {
-      pipelineCreateStore.loadUser(projectId);
+      pipelineCreateStore.loadUser(projectId, 1, '', result.pipelineUserRels);
       pipelineCreateStore.setEditVisible(true);
     }
   }
@@ -145,6 +147,20 @@ const PiplelineTable = withRouter(observer((props) => {
   function handleClickName(e, id) {
     e.preventDefault();
     linkToEdit(id);
+  }
+
+  function gotoRecord(id, name) {
+    if (id) {
+      history.push({
+        pathname: '/devops/deployment-operation',
+        search,
+        state: {
+          pipelineId: id,
+          pipelineName: name,
+          backPath: `/devops/pipeline${search}`,
+        },
+      });
+    }
   }
 
   /**
@@ -160,13 +176,14 @@ const PiplelineTable = withRouter(observer((props) => {
     const id = record && record.get('id');
     const isEnabled = record && record.get('isEnabled');
     const itemName = record && record.get('name');
+
     return (
       <div>
         <StatusTags
           name={formatMessage({ id: isEnabled !== '0' ? 'active' : 'stop' })}
           color={isEnabled !== '0' ? '#00bfa5' : '#cecece'}
         />
-        {isEnabled !== '0' ? <a className={`${prefixCls}-status-a`} onClick={(e) => { handleClickName(e, id); }}>{itemName}</a> : <span style={{ marginLeft: '0.08rem' }}>{itemName}</span>}
+        {isEnabled !== '0' && canDetail ? <a className={`${prefixCls}-status-a`} onClick={(e) => { handleClickName(e, id); }}>{itemName}</a> : <span style={{ marginLeft: '0.08rem' }}>{itemName}</span>}
       </div>
     );
   }
@@ -182,24 +199,29 @@ const PiplelineTable = withRouter(observer((props) => {
 
     const action = {
       execute: {
-        service: ['devops-service.pipeline.execute'],
+        service: ['choerodon.code.project.deploy.app-deployment.pipeline.ps.execute'],
         text: formatMessage({ id: 'pipeline.action.run' }),
         action: openExecuteCheck.bind(this, id, itemName),
       },
       disabled: {
-        service: ['devops-service.pipeline.updateIsEnabled'],
+        service: ['choerodon.code.project.deploy.app-deployment.pipeline.ps.disable'],
         text: formatMessage({ id: 'stop' }),
         action: openInvalid.bind(this, id, itemName),
       },
       enable: {
-        service: ['devops-service.pipeline.updateIsEnabled'],
+        service: ['choerodon.code.project.deploy.app-deployment.pipeline.ps.enable'],
         text: formatMessage({ id: 'active' }),
         action: makeStatusActive.bind(this, id),
       },
       remove: {
-        service: ['devops-service.pipeline.delete'],
+        service: ['choerodon.code.project.deploy.app-deployment.pipeline.ps.delete'],
         text: formatMessage({ id: 'delete' }),
         action: deletePipeline.bind(this, id, itemName),
+      },
+      record: {
+        service: ['choerodon.code.project.deploy.app-deployment.pipeline.ps.record'],
+        text: formatMessage({ id: 'pipeline.all.record' }),
+        action: gotoRecord.bind(this, id, itemName),
       },
     };
 
@@ -213,7 +235,7 @@ const PiplelineTable = withRouter(observer((props) => {
     if (!edit) {
       actionItem = filterItem(actionItem, ['remove']);
     }
-    
+
     return (<Action data={_.map(actionItem, (item) => ({ ...action[item] }))} />);
   }
 
@@ -232,86 +254,83 @@ const PiplelineTable = withRouter(observer((props) => {
     return <UserInfo avatar={createUserUrl || ''} name={createUserRealName || ''} id={createUserName || ''} />;
   }
 
-  const ExecuteModalContent = ({ modal, id }) => {
-    const [executeCheck, changeExCheck] = useState(false);
-    const [executeEnv, changeExEnv] = useState(null);
-    let check;
-    useEffect(() => {
-      check = checkStatus();
-    }, []);
+  /**
+     * 打开execute模态框
+     * @param {*} id
+     * @param {*} itemName
+     */
+  async function openExecuteCheck(id, itemName) {
+    const myModal = Modal.open({
+      key: modalKey,
+      title: `${formatMessage({ id: 'pipeline.execute' })}“${itemName}”`,
+      // footer: null,
+      okCancel: false,
+      onOk: () => { true; },
+      okText: <FormattedMessage id="close" />,
+      children: (
+        <Fragment>
+          <Spin size="small" />&nbsp;
+          <span className={`${prefixCls}-execute`}>{formatMessage({ id: 'pipeline.execute.checking' })}</span>
+        </Fragment>
+      ),
+    });
 
-    async function checkStatus() {
-      const response = await PiplineStore
-        .checkExcecute(projectId, id)
-        .catch((e) => Choerodon.handleResponseError(e));
-      if (response && response.failed) {
-        changeExCheck(false);
-        return;
-      }
+    const response = await PiplineStore
+      .checkExcecute(projectId, id)
+      .catch((e) => Choerodon.handleResponseError(e));
 
-      if (response && response.permission && response.versions) {
-        changeExCheck(EXECUTE_PASS);
-        modal.update({ okCancel: true, okText: <FormattedMessage id="submit" />, onOk: executeFun });
-        return;
-      }
-      changeExCheck(EXECUTE_FAILED);
-      changeExEnv(response.envName);
+    let executeStatus;
+    let envName;
+
+    if (response && response.permission && response.versions) {
+      envName = response.envName;
+      executeStatus = EXECUTE_PASS;
+    } else if (response && response.failed) {
+      executeStatus = EXECUTE_FAILED;
+    } else {
+      executeStatus = EXECUTE_FAILED;
     }
 
-    function closeExecuteCheck() {
-      changeExCheck(false);
-      changeExEnv(null);
-      modal.close();
-    }
+    myModal.update({
+      okCancel: true,
+      okText: !envName && executeStatus !== 'failed' ? <FormattedMessage id="submit" /> : <FormattedMessage id="iknow" />,
+      onOk: () => (!envName && executeStatus !== 'failed' ? executeFun(id, myModal) : true),
+      children: (envName
+        ? <FormattedMessage
+          id="pipeline.execute.no.permission"
+          values={{ envName }}
+        />
+        : <FormattedMessage id={`pipeline.execute.${executeStatus}`} />
+      ),
+      footer: (okBtn, cancelBtn) => (
+        <Fragment>
+          {executeStatus !== 'failed' && cancelBtn}{okBtn}
+        </Fragment>
+      ),
+    });
+  }
 
-    async function executeFun() {
-      const response = await PiplineStore
-        .executePipeline(projectId, id)
-        .catch((e) => Choerodon.handleResponseError(e));
-      if (handlePromptError(response, false)) {
-        linkToRecord(id);
-      }
-      closeExecuteCheck();
-      handleRefresh();
-      check = null;
+  async function executeFun(id, myModal) {
+    const response = await PiplineStore
+      .executePipeline(projectId, id)
+      .catch((e) => Choerodon.handleResponseError(e));
+    if (handlePromptError(response, false)) {
+      linkToRecord(id);
+      myModal.close();
     }
-    return (
-      <Fragment>
-        <div className="c7n-padding-top_8">
-          { /* eslint-disable-next-line no-nested-ternary */}
-          {executeCheck 
-            ? (executeEnv 
-              ? <FormattedMessage
-                id="pipeline.execute.no.permission"
-                values={{ envName: executeEnv }} 
-              />
-              : <FormattedMessage id={`pipeline.execute.${executeCheck}`} /> 
-            )
-            : <Fragment>
-              <Spin size="small" />
-              <span className={`${prefixCls}-execute`}>{formatMessage({ id: 'pipeline.execute.checking' })}</span>
-            </Fragment>}
-        </div>
-      </Fragment>
-    );
-  };
+    handleRefresh();
+  }
 
   return (
     <Page
       className="c7n-region"
       service={[
-        'devops-service.pipeline.pageByOptions',
-        'devops-service.pipeline.listByActive',
-        'devops-service.pipeline.execute',
-        'devops-service.pipeline.update',
-        'devops-service.pipeline.updateIsEnabled',
-        'devops-service.pipeline.delete',
-        'devops-service.pipeline.create',
+        'choerodon.code.project.deploy.app-deployment.pipeline.ps.default',
       ]}
     >
       <Header title={<FormattedMessage id="pipeline.head" />}>
         <Permission
-          service={['devops-service.pipeline.create']}
+          service={['choerodon.code.project.deploy.app-deployment.pipeline.ps.create']}
         >
           <Button
             funcType="flat"
@@ -338,7 +357,7 @@ const PiplelineTable = withRouter(observer((props) => {
           <Column name="isEnabled" renderer={renderStatus} />
           <Column name="action" renderer={renderAction} width={60} />
           <Column name="triggerType" renderer={renderTrigger} />
-          <Column name="name" />
+          <Column name="envName" />
           <Column name="createUserRealName" renderer={renderUser} />
           <Column name="lastUpdateDate" renderer={renderDate} />
         </Table>

@@ -25,7 +25,7 @@ function CertItem({
 
   function freshMenu() {
     treeDs.query();
-    const [envId] = record.get('parentId').split('-');
+    const [envId] = record.get('parentId').split('**');
     if (itemType === CERT_GROUP && envId === parentId) {
       setUpTarget({
         type: CERT_GROUP,
@@ -35,7 +35,7 @@ function CertItem({
   }
 
   function getEnvIsNotRunning() {
-    const [envId] = record.get('parentId').split('-');
+    const [envId] = record.get('parentId').split('**');
     const envRecord = treeDs.find((item) => item.get('key') === envId);
     const connect = envRecord.get('connect');
     return !connect;
@@ -44,14 +44,14 @@ function CertItem({
   function getSuffix() {
     const id = record.get('id');
     const certName = record.get('name');
-    const [envId] = record.get('parentId').split('-');
+    const [envId] = record.get('parentId').split('**');
     const status = record.get('status');
     const disabled = getEnvIsNotRunning() || status === 'operating';
     if (disabled) {
       return null;
     }
     const actionData = [{
-      service: ['devops-service.certification.delete'],
+      service: ['choerodon.code.project.deploy.app-deployment.resource.ps.delete-certificate'],
       text: formatMessage({ id: 'delete' }),
       action: () => openDeleteModal(envId, id, certName, 'certificate', freshMenu),
     }];

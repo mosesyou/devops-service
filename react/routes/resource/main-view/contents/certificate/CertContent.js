@@ -107,7 +107,7 @@ const CertContent = observer(() => {
     }
     const buttons = [
       {
-        service: ['devops-service.certification.delete'],
+        service: ['choerodon.code.project.deploy.app-deployment.resource.ps.delete-certificate'],
         text: formatMessage({ id: 'delete' }),
         action: () => openDeleteModal(parentId, id, name, 'certificate', refresh),
       },
@@ -125,7 +125,7 @@ const CertContent = observer(() => {
         border={false}
         queryBar="bar"
       >
-        <Column name="certName" renderer={renderName} />
+        <Column name="certName" renderer={renderName} sortable />
         <Column renderer={renderAction} width="0.7rem" />
         <Column name="domains" renderer={renderDomains} />
         <Column renderer={renderValid} header={formatMessage({ id: 'validDate' })} width="1rem" />

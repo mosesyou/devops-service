@@ -1,5 +1,6 @@
 import { useLocalStore } from 'mobx-react-lite';
 import { axios } from '@choerodon/boot';
+import { handlePromptError } from '../../../../utils';
 
 export default function useStore() {
   return useLocalStore(() => ({
@@ -17,6 +18,23 @@ export default function useStore() {
     get getResponseData() {
       return this.responseData;
     },
+
+    clusterDefaultTab: null,
+    setClusterDefaultTab(data) {
+      this.clusterDefaultTab = data;
+    },
+    get getClusterDefaultTab() {
+      return this.clusterDefaultTab;
+    },
+
+    canCreate: false,
+    get getCanCreate() {
+      return this.canCreate;
+    },
+    setCanCreate(flag) {
+      this.canCreate = flag;
+    },
+
     checkClusterName({ projectId, clusterName }) {
       return axios.get(`/devops/v1/projects/${projectId}/clusters/check_name?name=${clusterName}`);
     },
@@ -33,7 +51,16 @@ export default function useStore() {
       return axios.delete(`/devops/v1/projects/${projectId}/clusters/${clusterId}`);
     },
     deleteCheck(projectId, clusterId) {
-      return axios.get(`/devops/v1/projects/${projectId}/clusters/${clusterId}/check_connect_envs`);
+      return axios.get(`/devops/v1/projects/${projectId}/clusters/${clusterId}/check_connect_envs_and_pv`);
+    },
+
+    async checkCreate(projectId) {
+      try {
+        const res = await axios.get(`devops/v1/projects/${projectId}/clusters/check_enable_create`);
+        this.setCanCreate(handlePromptError(res));
+      } catch (e) {
+        this.setCanCreate(false);
+      }
     },
   }));
 }

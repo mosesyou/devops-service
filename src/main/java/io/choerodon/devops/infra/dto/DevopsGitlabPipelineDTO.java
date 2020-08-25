@@ -1,16 +1,19 @@
 package io.choerodon.devops.infra.dto;
 
-import java.util.Date;
+import io.choerodon.mybatis.annotation.ModifyAudit;
+import io.choerodon.mybatis.annotation.VersionAudit;
+import io.choerodon.mybatis.domain.AuditDomain;
+
 import javax.persistence.*;
+import java.util.Date;
 
-import io.choerodon.mybatis.entity.BaseDTO;
-
-
+@ModifyAudit
+@VersionAudit
 @Table(name = "devops_gitlab_pipeline")
-public class DevopsGitlabPipelineDTO extends BaseDTO {
+public class DevopsGitlabPipelineDTO extends AuditDomain {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @GeneratedValue(strategy = GenerationType.AUTO)
     private Long id;
     private Long appServiceId;
     private Long pipelineId;
@@ -124,5 +127,4 @@ public class DevopsGitlabPipelineDTO extends BaseDTO {
     public void setCommitUserId(Long commitUserId) {
         this.commitUserId = commitUserId;
     }
-
 }

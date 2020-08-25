@@ -1,15 +1,15 @@
-import React, { Component, Fragment } from 'react';
-import { observer } from 'mobx-react';
-import { withRouter } from 'react-router-dom';
-import { Button, Table, Tooltip } from 'choerodon-ui';
-import { Permission, stores, Action } from '@choerodon/boot';
-import { injectIntl, FormattedMessage } from 'react-intl';
+import React from 'react';
+import { observer } from 'mobx-react-lite';
+import { Tooltip } from 'choerodon-ui';
+import { Table } from 'choerodon-ui/pro';
+import { Action, Page } from '@choerodon/boot';
+import { injectIntl } from 'react-intl';
 import TimeAgo from 'timeago-react';
 import MouserOverWrapper from '../../../../components/MouseOverWrapper';
-import DevPipelineStore from '../../stores/DevPipelineStore';
-import Tips from '../../../../components/Tips/Tips';
-import CiPipelineStore from './stores';
-
+import Loading from '../../../../components/loading';
+import handleMapStore from '../../main-view/store/handleMapStore';
+import { usePipelineStore } from './stores';
+import { useCodeManagerStore } from '../../stores';
 
 import '../../../main.less';
 import './index.less';
@@ -61,269 +61,213 @@ const ICONS = {
     display: 'Manual',
   },
 };
-const ICONS_ACTION = {
-  pending: {
-    icon: 'icon-not_interested',
-  },
-  running: {
-    icon: 'icon-not_interested',
-  },
-  failed: {
-    icon: 'icon-refresh',
-  },
-  canceled: {
-    icon: 'icon-refresh',
-  },
-  skipped: {
-    icon: 'icon-refresh',
-  },
-};
 
-const { AppState } = stores;
-const HEIGHT = window.innerHeight
-  || document.documentElement.clientHeight
-  || document.body.clientHeight;
+const { Column } = Table;
 
-@observer
-class CiPipelineTable extends Component {
-  constructor(props) {
-    super(props);
-    this.state = {
-    };
+export default injectIntl(observer(() => {
+  const {
+    ciTableDS,
+    pipelineActionStore: {
+      cancelPipeline,
+      retryPipeline,
+    },
+    organizationId,
+    intl: { formatMessage },
+    AppState: { currentMenuType: { projectId } },
+    pipelineActionStore,
+  } = usePipelineStore();
+
+  const { appServiceDs, selectAppDs } = useCodeManagerStore();
+  const appServiceId = selectAppDs.current.get('appServiceId');
+
+  handleMapStore.setCodeManagerCiPipelineManage({
+    refresh: handleRefresh,
+    select: handleChange,
+  });
+
+  function handleRefresh() {
+    ciTableDS.query();
   }
 
-  get tableCiPipeline() {
-    const { pagination, getCiPipelines } = CiPipelineStore;
-    const { loading, intl: { formatMessage } } = this.props;
-    let Loading = loading;
-    if (loading === 'undefined') {
-      Loading = this.props.idnex.loading;
+  function handleChange() {
+    ciTableDS.query();
+  }
+
+  async function linkToNewMerge(url) {
+    try {
+      const res = await pipelineActionStore.checkLinkToGitlab(projectId, appServiceId);
+      window.open(url);
+    } catch (e) {
+      // return;
     }
-
-    const ciPipelineColumns = [
-      {
-        title: <FormattedMessage id="ciPipeline.status" />,
-        dataIndex: 'status',
-        render: (status, record) => this.renderStatus(status, record),
-      },
-      {
-        title: <Tips type="title" data="ciPipeline.sign" />,
-        dataIndex: 'pipelineId',
-        render: (pipelineId, record) => this.renderSign(pipelineId, record),
-      },
-      {
-        width: 56,
-        dataIndex: 'gitlabProjectId',
-        render: (gitlabProjectId, record) => this.renderAction(record),
-      },
-      {
-        title: <Tips type="title" data="ciPipeline.commit" />,
-        dataIndex: 'commit',
-        render: (commit, record) => this.renderCommit(commit, record),
-      },
-      {
-        title: <Tips type="title" data="ciPipeline.jobs" />,
-        dataIndex: 'stages',
-        render: (stages, record) => this.renderstages(stages, record),
-      },
-      {
-        title: <FormattedMessage id="ciPipeline.time" />,
-        dataIndex: 'pipelineTime',
-        render: (pipelineTime) => (
-          <span>
-            {this.renderTime(pipelineTime)}
-          </span>
-        ),
-      },
-      {
-        title: <FormattedMessage id="ciPipeline.createdAt" />,
-        dataIndex: 'creationDate',
-        render: (creationDate) => (
-          <div>
-            <Tooltip
-              title={creationDate}
-            >
-              <TimeAgo
-                datetime={creationDate}
-                locale={formatMessage({ id: 'language' })}
-              />
-            </Tooltip>
-          </div>),
-      },
-    ];
-    return (
-      <div>
-        <Table
-          loading={Loading}
-          size="default"
-          pagination={pagination}
-          columns={ciPipelineColumns}
-          dataSource={getCiPipelines}
-          rowKey={(record) => record.pipelineId}
-          onChange={this.handleTableChange}
-          rowClassName="c7ncd-table-row-font-color"
-          filterBar={false}
-        />
-      </div>
-    );
   }
 
-  handleTableChange = (pagination) => {
-    const { store } = this.props;
-    store.loadPipelines(
-      true,
-      DevPipelineStore.selectedApp,
-      pagination.current,
-      pagination.pageSize,
-    );
-  };
-
-  handleRefresh =(spin = true) => {
-    const { store } = this.props;
-    store.loadPipelines(
-      spin,
-      DevPipelineStore.selectedApp,
-      store.pagination.current,
-      store.pagination.pageSize,
-    );
-  };
-
-  handleAction(record) {
-    const { store } = this.props;
-    if (record.status === 'running' || record.status === 'pending') {
-      store.cancelPipeline(record.gitlabProjectId, record.pipelineId);
-    } else {
-      store.retryPipeline(record.gitlabProjectId, record.pipelineId);
-    }
-    this.handleRefresh();
-  }
-
-  renderStatus = (status, record) => {
-    if (status) {
+  function renderStatus({ value, record }) {
+    const gitlabUrl = record && record.get('gitlabUrl');
+    const pipelineId = record && record.get('pipelineId');
+    if (value) {
       return (<div className="c7n-status">
-        <a
-          href={record.gitlabUrl ? `${record.gitlabUrl.slice(0, -4)}/pipelines/${record.pipelineId}` : null}
-          target="_blank"
-          rel="nofollow me noopener noreferrer"
+        <span
+          onClick={() => linkToNewMerge(gitlabUrl ? `${gitlabUrl.slice(0, -4)}/pipelines/${pipelineId}` : null)}
           className="c7n-status-link"
         >
-          <i className={`icon ${ICONS[status].icon} c7n-icon-${status} c7n-icon-lg`} />
-          <span className="c7n-text-status black">{ICONS[status].display}</span>
-        </a>
+          <i className={`icon ${ICONS[value].icon} c7n-icon-${value} c7n-icon-lg`} />
+          <span className="c7n-text-status black">{ICONS[value].display}</span>
+        </span>
       </div>);
     } else {
       return 'Null';
     }
-  };
+  }
 
-  renderSign = (id, record) => (
-    <div className="c7n-cipip-sign">
-      <div className="c7n-des-sign">
-        <span>
-          <a
-            className="c7n-link-decoration"
-            href={record.gitlabUrl ? `${record.gitlabUrl.slice(0, -4)}/pipelines/${record.pipelineId}` : null}
-            target="_blank"
-            rel="nofollow me noopener noreferrer"
-          >
-            <span className="mr7 black">
-              #{id}
-            </span>
-          </a>
-            by
-        </span>
-        <Tooltip
-          placement="top"
-          title={record.pipelineUserName ? `${record.pipelineUserName}${record.pipelineUserLoginName ? `(${record.pipelineUserLoginName})` : ''}` : ''}
-          trigger="hover"
-        >
-          {
-            record.pipelineUserUrl
-              ? <img className="c7n-image-avatar m8" src={record.pipelineUserUrl} alt="avatar" />
-              : <span className="c7n-avatar m8 mt3">{record.pipelineUserName ? record.pipelineUserName.substring(0, 1).toUpperCase() : ''}</span>
-          }
-        </Tooltip>
-      </div>
-      {
-        record.latest
-          ? (
-            <Tooltip
-              placement="top"
-              title="Latest pipeline for this branch"
-              trigger="hover"
+  function renderSign({ record }) {
+    const gitlabUrl = record && record.get('gitlabUrl');
+    const pipelineId = record && record.get('pipelineId');
+    const pipelineUserLoginName = record && record.get('pipelineUserLoginName');
+    const pipelineUserName = record && record.get('pipelineUserName');
+    const latest = record && record.get('latest');
+    const pipelineUserUrl = record && record.get('pipelineUserUrl');
+    return (
+      <div className="c7n-cipip-sign">
+        <div className="c7n-des-sign">
+          <span>
+            <span
+              className="c7n-link-decoration"
+              onClick={() => linkToNewMerge(gitlabUrl ? `${gitlabUrl.slice(0, -4)}/pipelines/${pipelineId}` : null)}
             >
-              <span title="" className="c7n-latest">
-                latest
+              <span className="mr7 black">
+                #{pipelineId}
               </span>
-            </Tooltip>
-          )
-          : null
-      }
-    </div>
-  );
-
-  renderCommit = (commit, record) => (
-    <div className="c7n-commit">
-      <div className="c7n-title-commit">
-        <i className="icon icon-branch mr7" />
-        <MouserOverWrapper text={record.ref} width={0.1}>
-          <a
-            className="c7n-link-decoration"
-            href={record.gitlabUrl ? `${record.gitlabUrl.slice(0, -4)}/commits/${record.ref}` : null}
-            target="_blank"
-            rel="nofollow me noopener noreferrer"
-          >
-            <span className="black">{record.ref}</span>
-          </a>
-        </MouserOverWrapper>
-        <i className="icon icon-point m8" />
-        <Tooltip
-          placement="top"
-          title={record.commit}
-          trigger="hover"
-        >
-          <a
-            className="c7n-link-decoration"
-            href={record.gitlabUrl ? `${record.gitlabUrl.slice(0, -4)}/commit/${record.commit}` : null}
-            target="_blank"
-            rel="nofollow me noopener noreferrer"
-          >
-            <span>
-              { record.commit ? record.commit.slice(0, 8) : '' }
             </span>
-          </a>
-        </Tooltip>
-      </div>
-      <div className="c7n-des-commit">
-        <Tooltip
-          placement="top"
-          title={record.commitUserName ? `${record.commitUserName}${record.commitUserLoginName ? `(${record.commitUserLoginName})` : ''}` : ''}
-          trigger="hover"
-        >
-          {
-            record.commitUserUrl
-              ? <img className="c7n-image-avatar" src={record.commitUserUrl} alt="avatar" />
-              : <span className="c7n-avatar mr7">{ record.commitUserName ? record.commitUserName.substring(0, 1).toUpperCase() : '' }</span>
-          }
-        </Tooltip>
-        <MouserOverWrapper text={record.commitContent} width={0.2}>
-          <a
-            className="c7n-link-decoration"
-            href={record.gitlabUrl ? `${record.gitlabUrl.slice(0, -4)}/commit/${record.commit}` : null}
-            target="_blank"
-            rel="nofollow me noopener noreferrer"
+            by
+          </span>
+          <Tooltip
+            placement="top"
+            title={pipelineUserName ? `${pipelineUserName}${pipelineUserLoginName ? `(${pipelineUserLoginName})` : ''}` : ''}
+            trigger="hover"
           >
-            <span className="gray">
-              {record.commitContent}
-            </span>
-          </a>
-        </MouserOverWrapper>
+            {
+              pipelineUserUrl
+                ? <img className="c7n-image-avatar m8" src={pipelineUserUrl} alt="avatar" />
+                : <span className="c7n-avatar m8 mt3">{pipelineUserName ? pipelineUserName.substring(0, 1).toUpperCase() : ''}</span>
+            }
+          </Tooltip>
+        </div>
+        {
+          latest
+            ? (
+              <Tooltip
+                placement="top"
+                title="Latest pipeline for this branch"
+                trigger="hover"
+              >
+                <span title="" className="c7n-latest">
+                  latest
+                </span>
+              </Tooltip>
+            )
+            : null
+        }
       </div>
-    </div>
-  );
+    );
+  }
 
-  renderstages = (stages, record) => {
+  function handleAction(record) {
+    const status = record && record.get('status');
+    const gitlabProjectId = record && record.get('gitlabProjectId');
+    const pipelineId = record && record.get('pipelineId');
+    if (status === 'running' || status === 'pending') {
+      cancelPipeline(gitlabProjectId, pipelineId, organizationId);
+    } else {
+      retryPipeline(gitlabProjectId, pipelineId, organizationId);
+    }
+    ciTableDS.query();
+  }
+
+  function renderAction({ record }) {
+    const status = record.get('status');
+    if (status && status !== 'passed' && status !== 'success' && status !== 'skipped') {
+      const action = [
+        {
+          service: [(status === 'running' || status === 'pending') ? 'choerodon.code.project.develop.code-management.ps.ci.cancel' : 'choerodon.code.project.develop.code-management.ps.ci.retry'],
+          text: formatMessage({ id: (status === 'running' || status === 'pending') ? 'cancel' : 'retry' }),
+          action: handleAction.bind(this, record),
+        },
+      ];
+      return (<Action data={action} />);
+    } else {
+      return null;
+    }
+  }
+
+  function renderCommit({ record }) {
+    const gitlabUrl = record.get('gitlabUrl');
+    const ref = record.get('ref');
+    const commit = record.get('commit');
+    const commitUserName = record.get('commitUserName');
+    const commitUserUrl = record.get('commitUserUrl');
+    const commitUserLoginName = record.get('commitUserLoginName');
+    const commitContent = record.get('commitContent');
+    return (
+      <div className="c7n-commit">
+        <div className="c7n-title-commit">
+          <i className="icon icon-branch mr7" />
+          <MouserOverWrapper text={ref} width={0.1}>
+            <span
+              className="c7n-link-decoration"
+              onClick={() => linkToNewMerge(gitlabUrl ? `${gitlabUrl.slice(0, -4)}/commits/${ref}` : null)}
+            >
+              <span className="black">{ref}</span>
+            </span>
+          </MouserOverWrapper>
+          <i className="icon icon-point m8" />
+          <Tooltip
+            placement="top"
+            title={commit}
+            trigger="hover"
+          >
+            <span
+              className="c7n-link-decoration"
+              onClick={() => linkToNewMerge(gitlabUrl ? `${gitlabUrl.slice(0, -4)}/commit/${commit}` : null)}
+            >
+              <span>
+                {commit ? commit.slice(0, 8) : ''}
+              </span>
+            </span>
+          </Tooltip>
+        </div>
+        <div className="c7n-des-commit">
+          <Tooltip
+            placement="top"
+            title={commitUserName ? `${commitUserName}${commitUserLoginName ? `(${commitUserLoginName})` : ''}` : ''}
+            trigger="hover"
+          >
+            {
+              commitUserUrl
+                ? <img className="c7n-image-avatar" src={commitUserUrl} alt="avatar" />
+                : <span className="c7n-avatar mr7">{commitUserName ? commitUserName.substring(0, 1).toUpperCase() : ''}</span>
+            }
+          </Tooltip>
+          <MouserOverWrapper text={commitContent} width={0.2}>
+            <span
+              className="c7n-link-decoration"
+              onClick={() => linkToNewMerge(gitlabUrl ? `${gitlabUrl.slice(0, -4)}/commit/${commit}` : null)}
+            >
+              <span className="gray">
+                {commitContent}
+              </span>
+            </span>
+          </MouserOverWrapper>
+        </div>
+      </div>
+    );
+  }
+
+  function renderStages({ value, record }) {
+    const gitlabUrl = record.get('gitlabUrl');
+    const stages = value.slice();
     const pipeStage = [];
+
     if (stages && stages.length) {
       for (let i = 0, l = stages.length; i < l; i += 1) {
         pipeStage.push(<span className="c7n-jobs" key={i}>
@@ -338,17 +282,15 @@ class CiPipelineTable extends Component {
             {stages[i].name === 'sonarqube' ? <i
               className={`icon ${ICONS[stages[i].status || 'skipped'].icon || ''}
                 c7n-icon-${stages[i].status} c7n-icon-lg`}
-            /> : <a
-              className=""
-              href={record.gitlabUrl ? `${record.gitlabUrl.slice(0, -4)}/-/jobs/${stages[i].id}` : null}
-              target="_blank"
-              rel="nofollow me noopener noreferrer"
+            /> : <span
+              className="c7n-link-icon"
+              onClick={() => linkToNewMerge(gitlabUrl ? `${gitlabUrl.slice(0, -4)}/-/jobs/${stages[i].id}` : null)}
             >
               <i
                 className={`icon ${ICONS[stages[i].status || 'skipped'].icon || ''}
                 c7n-icon-${stages[i].status} c7n-icon-lg`}
               />
-            </a>}
+            </span>}
           </Tooltip>
         </span>);
       }
@@ -358,10 +300,10 @@ class CiPipelineTable extends Component {
         {pipeStage}
       </div>
     );
-  };
+  }
 
-  renderTime = (pipelineTime) => {
-    const { intl: { formatMessage } } = this.props;
+  function renderTime(value) {
+    let pipelineTime = value;
     if (pipelineTime) {
       if (pipelineTime.split('.')[1] === '00') {
         pipelineTime = `${pipelineTime.toString().split('.')[0]}${formatMessage({ id: 'minutes' })}`;
@@ -376,29 +318,53 @@ class CiPipelineTable extends Component {
     } else {
       return '--';
     }
-  };
-
-  renderAction = (record) => {
-    const {
-      intl: { formatMessage },
-    } = this.props;
-    if (record.status && record.status !== 'passed' && record.status !== 'success' && record.status !== 'skipped') {
-      const action = [
-        {
-          service: ['devops-service.project-pipeline.retry', 'devops-service.project-pipeline.cancel'],
-          text: formatMessage({ id: (record.status === 'running' || record.status === 'pending') ? 'cancel' : 'retry' }),
-          action: this.handleAction.bind(this, record),
-        },
-      ];
-      return (<Action data={action} />);
-    } else {
-      return null;
-    }
-  };
-
-  render() {
-    return this.tableCiPipeline;
   }
-}
 
-export default injectIntl(CiPipelineTable);
+  function renderTimeSpan({ value }) {
+    return (
+      <span>
+        {renderTime(value)}
+      </span>
+    );
+  }
+
+  function renderDateTooltip({ value }) {
+    return (
+      <div>
+        <Tooltip
+          title={value}
+        >
+          <TimeAgo
+            datetime={value}
+            locale={formatMessage({ id: 'language' })}
+          />
+        </Tooltip>
+      </div>
+    );
+  }
+  return (
+    <Page
+      className="c7n-ciPipeline page-container"
+      service={[]}
+    >
+      {appServiceDs.status !== 'ready' || !appServiceId
+        ? <Loading display />
+        : <div className="c7ncd-tab-table">
+          <Table
+            className="c7n-pipineline-table"
+            queryBar="none"
+            dataSet={ciTableDS}
+            size="small"
+          >
+            <Column name="status" renderer={renderStatus} width={100} />
+            <Column name="pipelineId" renderer={renderSign} />
+            <Column name="gitlabProjectId" renderer={renderAction} width={50} />
+            <Column name="commit" renderer={renderCommit} />
+            <Column name="stages" renderer={renderStages} />
+            <Column name="pipelineTime" renderer={renderTimeSpan} width={120} />
+            <Column name="creationDate" renderer={renderDateTooltip} width={120} />
+          </Table>
+        </div>}
+    </Page>
+  );
+}));

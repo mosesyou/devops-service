@@ -3,6 +3,7 @@ import { FormattedMessage } from 'react-intl';
 import { observer } from 'mobx-react-lite';
 import map from 'lodash/map';
 import { Spin } from 'choerodon-ui';
+import { Permission } from '@choerodon/boot';
 import ResourceTitle from '../../components/resource-title';
 import { useResourceStore } from '../../../stores';
 import { useCertDetailStore } from './stores';
@@ -14,6 +15,7 @@ const Content = observer(() => {
   const {
     prefixCls,
     intlPrefix,
+    intl: { formatMessage },
   } = useResourceStore();
   const { detailDs } = useCertDetailStore();
 
@@ -33,12 +35,12 @@ const Content = observer(() => {
         <span className="detail-section-li-text">DNSNames:&nbsp;</span>
         <span>{item}</span>
       </li>
-    )) : '暂无数据';
-    const ingressNode = ingresses ? map(ingresses, (item) => (
+    )) : <span style={{ color: 'rgba(0,0,0,.65)' }}>{formatMessage({ id: 'nodata' })}</span>;
+    const ingressNode = ingresses && ingresses.length > 0 ? map(ingresses, (item) => (
       <li className={`${prefixCls}-detail-section-li`}>
         <span>{item}</span>
       </li>
-    )) : '暂无数据';
+    )) : <span style={{ color: 'rgba(0,0,0,.65)' }}>{formatMessage({ id: 'nodata' })}</span>;
 
     return <Fragment>
       <div>
@@ -65,17 +67,21 @@ const Content = observer(() => {
   }
 
   return (
-    <div className={`${prefixCls}-certificate-detail`}>
-      <ResourceTitle
-        iconType="class"
-        record={detailDs.current}
-        statusKey="commandStatus"
-      />
-      <Spin spinning={detailDs.status === 'loading'}>
-        {getContent()}
-      </Spin>
-      <Modals />
-    </div>
+    <Permission
+      service={['choerodon.code.project.deploy.app-deployment.resource.ps.cert-detail']}
+    >
+      <div className={`${prefixCls}-certificate-detail`}>
+        <ResourceTitle
+          iconType="class"
+          record={detailDs.current}
+          statusKey="commandStatus"
+        />
+        <Spin spinning={detailDs.status === 'loading'}>
+          {getContent()}
+        </Spin>
+        <Modals />
+      </div>
+    </Permission>
   );
 });
 

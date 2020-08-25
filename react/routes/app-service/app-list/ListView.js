@@ -4,14 +4,16 @@ import { observer } from 'mobx-react-lite';
 import { FormattedMessage } from 'react-intl';
 import { withRouter, Link } from 'react-router-dom';
 import { Page, Content, Header, Permission, Action, Breadcrumb, Choerodon } from '@choerodon/boot';
-import { Button } from 'choerodon-ui';
+import { Button, Spin, Tooltip } from 'choerodon-ui';
 import pick from 'lodash/pick';
 import TimePopover from '../../../components/timePopover';
 import { useAppTopStore } from '../stores';
 import { useAppServiceStore } from './stores';
 import CreateForm from '../modals/creat-form';
+import EditForm from '../modals/edit-form';
 import ImportForm from './modal/import-form';
 import StatusTag from '../components/status-tag';
+import { handlePromptError } from '../../../utils';
 
 import './index.less';
 
@@ -19,6 +21,8 @@ const { Column } = Table;
 const modalKey1 = Modal.key();
 const modalKey2 = Modal.key();
 const modalKey3 = Modal.key();
+const createModalKey = Modal.key();
+const editModalKey = Modal.key();
 const modalStyle1 = {
   width: 380,
 };
@@ -36,14 +40,10 @@ const ListView = withRouter(observer((props) => {
   const {
     intl: { formatMessage },
     AppState: {
-      currentMenuType: {
-        id: projectId,
-      },
+      currentMenuType: { projectId },
     },
-    importDs,
-    importTableDs,
-    selectedDs,
     listDs,
+    appListStore,
   } = useAppServiceStore();
   const [isInit, setIsInit] = useState(true);
 
@@ -53,7 +53,7 @@ const ListView = withRouter(observer((props) => {
     if (isInit && listDs.status === 'ready') {
       const { location: { state } } = props;
       if (state && state.openCreate) {
-        openModal(listDs.create());
+        openCreate();
       }
       setIsInit(false);
     }
@@ -61,6 +61,7 @@ const ListView = withRouter(observer((props) => {
 
   function refresh() {
     listDs.query();
+    appListStore.checkCreate(projectId);
   }
 
   function renderName({ value, record }) {
@@ -71,15 +72,18 @@ const ListView = withRouter(observer((props) => {
       },
     } = props;
     const canLink = !record.get('fail') && record.get('synchro');
-    return (canLink ? (
-      <Link
-        to={{
-          pathname: `${pathname}/detail/${record.get('id')}`,
-          search,
-        }}
-      >
-        <span className={`${prefixCls}-table-name`}>{value}</span>
-      </Link>) : <span>{value}</span>
+    return (
+      <Tooltip title={value} placement="top">
+        {canLink ? (
+          <Link
+            to={{
+              pathname: `${pathname}/detail/${record.get('id')}`,
+              search,
+            }}
+          >
+            <span className={`${prefixCls}-table-name`}>{value}</span>
+          </Link>) : <span>{value}</span>}
+      </Tooltip>
     );
   }
 
@@ -112,22 +116,22 @@ const ListView = withRouter(observer((props) => {
   function renderActions({ record }) {
     const actionData = {
       edit: {
-        service: ['devops-service.app-service.update'],
+        service: ['choerodon.code.project.develop.app-service.ps.update'],
         text: formatMessage({ id: 'edit' }),
         action: openEdit,
       },
       stop: {
-        service: ['devops-service.app-service.updateActive'],
+        service: ['choerodon.code.project.develop.app-service.ps.disable'],
         text: formatMessage({ id: 'stop' }),
-        action: () => changeActive(false),
+        action: openStop.bind(this, record),
       },
       run: {
-        service: ['devops-service.app-service.updateActive'],
+        service: ['choerodon.code.project.develop.app-service.ps.enable'],
         text: formatMessage({ id: 'active' }),
         action: () => changeActive(true),
       },
       delete: {
-        service: ['devops-service.app-service.delete'],
+        service: ['choerodon.code.project.develop.app-service.ps.delete'],
         text: formatMessage({ id: 'delete' }),
         action: handleDelete,
       },
@@ -155,57 +159,71 @@ const ListView = withRouter(observer((props) => {
     }
   }
 
-  function openModal(record) {
-    const isModify = record.status !== 'add';
+  function openCreate() {
     Modal.open({
-      key: modalKey1,
+      key: createModalKey,
       drawer: true,
       style: modalStyle1,
-      title: <FormattedMessage id={`${intlPrefix}.${isModify ? 'edit' : 'create'}`} />,
+      title: formatMessage({ id: `${intlPrefix}.create` }),
       children: <CreateForm
-        dataSet={listDs}
-        record={record}
-        appServiceStore={appServiceStore}
-        projectId={projectId}
+        refresh={refresh}
         intlPrefix={intlPrefix}
         prefixCls={prefixCls}
       />,
-      okText: formatMessage({ id: isModify ? 'save' : 'create' }),
-      onCancel: () => handleCancel(listDs),
+      okText: formatMessage({ id: 'create' }),
     });
   }
 
   function openImport() {
-    importDs.create();
     Modal.open({
       key: modalKey2,
       drawer: true,
       style: modalStyle2,
-      title: <FormattedMessage id={`${intlPrefix}.import`} />,
+      title: formatMessage({ id: `${intlPrefix}.import` }),
       children: <ImportForm
-        dataSet={importDs}
-        tableDs={importTableDs}
-        record={importDs.current}
         appServiceStore={appServiceStore}
-        projectId={projectId}
         intlPrefix={intlPrefix}
         prefixCls={prefixCls}
         refresh={refresh}
-        selectedDs={selectedDs}
       />,
       okText: formatMessage({ id: 'import' }),
-      afterClose: () => { selectedDs.removeAll(); },
-      onCancel: () => handleCancel(importDs),
     });
   }
 
   function openEdit() {
-    appServiceStore.setAppServiceId(listDs.current.get('id'));
-    openModal(listDs.current);
+    const appServiceId = listDs.current.get('id');
+
+    Modal.open({
+      key: editModalKey,
+      drawer: true,
+      style: modalStyle1,
+      title: formatMessage({ id: `${intlPrefix}.edit` }),
+      children: <EditForm
+        refresh={refresh}
+        intlPrefix={intlPrefix}
+        prefixCls={prefixCls}
+        appServiceId={appServiceId}
+      />,
+      okText: formatMessage({ id: 'save' }),
+    });
   }
 
-  function handleDelete() {
+  // 因为在应用服务那边做了最近访问前端缓存，如果要删除，也必须要删除这个缓存
+  function checkLocalstorage(appId) {
+    const recentApp = JSON.parse(localStorage.getItem('recent-app'));
+    if (recentApp && recentApp[projectId]) {
+      const currentProjectApp = recentApp[projectId];
+      const hasData = currentProjectApp.filter(item => item.id !== appId);
+      if (hasData.length < currentProjectApp.length) {
+        recentApp[projectId] = hasData;
+        localStorage.setItem('recent-app', JSON.stringify(recentApp));
+      }
+    }
+  }
+
+  async function handleDelete() {
     const record = listDs.current;
+    const appId = record.get('id');
     const modalProps = {
       title: formatMessage({ id: `${intlPrefix}.delete.title` }, { name: record.get('name') }),
       children: formatMessage({ id: `${intlPrefix}.delete.des` }),
@@ -213,7 +231,11 @@ const ListView = withRouter(observer((props) => {
       okProps: { color: 'red' },
       cancelProps: { color: 'dark' },
     };
-    listDs.delete(record, modalProps);
+    const res = await listDs.delete(record, modalProps);
+    if (res && res.success) {
+      refresh();
+      checkLocalstorage(appId);
+    }
   }
 
   async function changeActive(active) {
@@ -233,6 +255,7 @@ const ListView = withRouter(observer((props) => {
   async function handleChangeActive(active) {
     try {
       if (await appServiceStore.changeActive(projectId, listDs.current.get('id'), active)) {
+        checkLocalstorage(listDs.current.get('id'));
         refresh();
       } else {
         return false;
@@ -243,35 +266,107 @@ const ListView = withRouter(observer((props) => {
     }
   }
 
-  function handleTableFilter(record) {
-    return record.status !== 'add';
+  function openStop(record) {
+    const id = record.get('id');
+
+    const stopModal = Modal.open({
+      key: modalKey3,
+      title: formatMessage({ id: `${intlPrefix}.check` }),
+      children: <Spin />,
+      footer: null,
+    });
+
+    appServiceStore.checkAppService(projectId, id).then((res) => {
+      if (handlePromptError(res)) {
+        const { checkResources, checkRule, checkCi } = res;
+        const status = checkResources || checkRule || checkCi;
+        let childrenContent;
+
+        if (!status) {
+          childrenContent = <FormattedMessage id={`${intlPrefix}.stop.tips`} />;
+        } else if (checkCi) {
+          childrenContent = '该应用服务下存在流水线资源，无法停用。';
+        } else if (checkResources && !checkRule) {
+          childrenContent = formatMessage({ id: `${intlPrefix}.has.resource` });
+        } else if (!checkResources && checkRule) {
+          childrenContent = formatMessage({ id: `${intlPrefix}.has.rules` });
+        } else {
+          childrenContent = formatMessage({ id: `${intlPrefix}.has.both` });
+        }
+
+        const statusObj = {
+          title: status ? formatMessage({ id: `${intlPrefix}.cannot.stop` }, { name: listDs.current.get('name') }) : formatMessage({ id: `${intlPrefix}.stop` }, { name: listDs.current.get('name') }),
+          // eslint-disable-next-line no-nested-ternary
+          children: childrenContent,
+          okCancel: !status,
+          onOk: () => (status ? stopModal.close() : handleChangeActive(false)),
+          okText: status ? formatMessage({ id: 'iknow' }) : formatMessage({ id: 'stop' }),
+          footer: ((okBtn, cancelBtn) => (
+            <Fragment>
+              {okBtn}
+              {!status && cancelBtn}
+            </Fragment>
+          )),
+        };
+        stopModal.update(statusObj);
+      } else {
+        stopModal.close();
+      }
+    }).catch((err) => {
+      stopModal.close();
+      Choerodon.handleResponseError(err);
+    });
   }
 
   function getHeader() {
+    const disabled = !appListStore.getCanCreate;
+    const disabledMessage = disabled ? formatMessage({ id: `${intlPrefix}.create.disabled` }) : '';
     return <Header title={<FormattedMessage id="app.head" />}>
       <Permission
-        service={['devops-service.app-service.create']}
+        service={['choerodon.code.project.develop.app-service.ps.create']}
       >
-        <Button
-          icon="playlist_add"
-          onClick={() => openModal(listDs.create())}
-        >
-          <FormattedMessage id={`${intlPrefix}.create`} />
-        </Button>
+        <Tooltip title={disabledMessage} placement="bottom">
+          <Button
+            icon="playlist_add"
+            disabled={disabled}
+            onClick={openCreate}
+          >
+            <FormattedMessage id={`${intlPrefix}.create`} />
+          </Button>
+        </Tooltip>
       </Permission>
       <Permission
-        service={['devops-service.app-service.importApp']}
+        service={['choerodon.code.project.develop.app-service.ps.import']}
+      >
+        <Tooltip title={disabledMessage} placement="bottom">
+          <Button
+            icon="archive"
+            disabled={disabled}
+            onClick={openImport}
+          >
+            <FormattedMessage id={`${intlPrefix}.import`} />
+          </Button>
+        </Tooltip>
+      </Permission>
+      <Permission
+        service={['choerodon.code.project.develop.app-service.ps.permission.update']}
       >
         <Button
-          icon="archive"
-          onClick={openImport}
+          icon="authority"
+          onClick={() => {
+            const {
+              history,
+              location,
+            } = props;
+            history.push(`/rducm/code-lib-management/assign${location.search}`);
+          }}
         >
-          <FormattedMessage id={`${intlPrefix}.import`} />
+          权限管理
         </Button>
       </Permission>
       <Button
         icon="refresh"
-        onClick={() => refresh()}
+        onClick={refresh}
       >
         <FormattedMessage id="refresh" />
       </Button>
@@ -287,7 +382,7 @@ const ListView = withRouter(observer((props) => {
           dataSet={listDs}
           border={false}
           queryBar="bar"
-          filter={handleTableFilter}
+          pristine
           className={`${prefixCls}.table`}
           rowClassName="c7ncd-table-row-font-color"
         >
@@ -296,7 +391,7 @@ const ListView = withRouter(observer((props) => {
           <Column name="code" sortable />
           <Column name="type" renderer={renderType} />
           <Column name="repoUrl" renderer={renderUrl} />
-          <Column name="creationDate" renderer={renderDate} />
+          <Column name="creationDate" renderer={renderDate} sortable />
           <Column name="active" renderer={renderStatus} width="0.7rem" align="left" />
         </Table>
       </Content>

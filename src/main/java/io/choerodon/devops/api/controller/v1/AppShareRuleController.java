@@ -3,24 +3,25 @@ package io.choerodon.devops.api.controller.v1;
 import java.util.Optional;
 import javax.validation.Valid;
 
-import com.github.pagehelper.PageInfo;
 import io.swagger.annotations.ApiOperation;
 import io.swagger.annotations.ApiParam;
+import org.hzero.starter.keyencrypt.core.Encrypt;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import springfox.documentation.annotations.ApiIgnore;
 
-import io.choerodon.base.annotation.Permission;
-import io.choerodon.base.domain.PageRequest;
-import io.choerodon.base.enums.ResourceType;
+import io.choerodon.core.domain.Page;
 import io.choerodon.core.exception.CommonException;
 import io.choerodon.core.iam.InitRoleCode;
+import io.choerodon.core.iam.ResourceLevel;
 import io.choerodon.devops.api.vo.AppServiceShareRuleUpdateVO;
 import io.choerodon.devops.api.vo.AppServiceShareRuleVO;
 import io.choerodon.devops.app.service.AppServiceShareRuleService;
 import io.choerodon.devops.infra.util.ConvertUtils;
+import io.choerodon.mybatis.pagehelper.domain.PageRequest;
 import io.choerodon.swagger.annotation.CustomPageRequest;
+import io.choerodon.swagger.annotation.Permission;
 
 /**
  * Created by ernst on 2018/5/12.
@@ -28,7 +29,7 @@ import io.choerodon.swagger.annotation.CustomPageRequest;
 @RestController
 @RequestMapping(value = "/v1/projects/{project_id}/app_service_share")
 public class AppShareRuleController {
-    private AppServiceShareRuleService applicationShareService;
+    private final AppServiceShareRuleService applicationShareService;
 
     public AppShareRuleController(AppServiceShareRuleService applicationShareService) {
         this.applicationShareService = applicationShareService;
@@ -42,8 +43,8 @@ public class AppShareRuleController {
      * @param appServiceShareRuleVO 服务共享规则
      * @return Long
      */
-    @Permission(type = ResourceType.PROJECT, roles = {InitRoleCode.PROJECT_OWNER})
-    @ApiOperation(value = "服务共享规则")
+    @Permission(level = ResourceLevel.ORGANIZATION, roles = {InitRoleCode.PROJECT_OWNER})
+    @ApiOperation(value = "创建服务共享规则")
     @PostMapping
     public ResponseEntity<AppServiceShareRuleVO> create(
             @ApiParam(value = "项目id", required = true)
@@ -63,7 +64,7 @@ public class AppShareRuleController {
      * @param appServiceShareRuleUpdateVO 服务共享规则
      * @return Long
      */
-    @Permission(type = ResourceType.PROJECT, roles = {InitRoleCode.PROJECT_OWNER})
+    @Permission(level = ResourceLevel.ORGANIZATION, roles = {InitRoleCode.PROJECT_OWNER})
     @ApiOperation(value = "更新服务共享规则")
     @PutMapping
     public ResponseEntity<AppServiceShareRuleVO> update(
@@ -77,46 +78,32 @@ public class AppShareRuleController {
                 .orElseThrow(() -> new CommonException("error.share.rule.update"));
     }
 
-    /**
-     * 查询服务共享规则
-     *
-     * @param projectId
-     * @param pageRequest
-     * @param param
-     * @return
-     */
-    @Permission(type = ResourceType.PROJECT, roles = {InitRoleCode.PROJECT_OWNER})
-    @ApiOperation(value = "服务共享规则")
+    @Permission(level = ResourceLevel.ORGANIZATION, roles = {InitRoleCode.PROJECT_OWNER})
+    @ApiOperation(value = "分页查询服务共享规则")
     @PostMapping(value = "/page_by_options")
     @CustomPageRequest
-    public ResponseEntity<PageInfo<AppServiceShareRuleVO>> pageByOptions(
+    public ResponseEntity<Page<AppServiceShareRuleVO>> pageByOptions(
             @ApiParam(value = "项目Id", required = true)
             @PathVariable(value = "project_id") Long projectId,
+            @Encrypt
             @ApiParam
             @RequestParam(value = "app_service_id") Long appServiceId,
             @ApiParam(value = "分页参数")
-            @ApiIgnore PageRequest pageRequest,
+            @ApiIgnore PageRequest pageable,
             @ApiParam(value = "过滤参数")
             @RequestBody(required = false) String param) {
         return Optional.ofNullable(
-                applicationShareService.pageByOptions(projectId, appServiceId, pageRequest, param))
+                applicationShareService.pageByOptions(projectId, appServiceId, pageable, param))
                 .map(target -> new ResponseEntity<>(target, HttpStatus.OK))
                 .orElseThrow(() -> new CommonException("error.share.rule.page"));
     }
 
-    /**
-     * 查询单个服务共享规则详情
-     *
-     * @param projectId
-     * @param ruleId
-     * @return
-     */
-    @Permission(type = ResourceType.PROJECT, roles = {InitRoleCode.PROJECT_OWNER, InitRoleCode.PROJECT_MEMBER})
-    @ApiOperation(value = "服务共享规则")
+    @Permission(level = ResourceLevel.ORGANIZATION, roles = {InitRoleCode.PROJECT_OWNER, InitRoleCode.PROJECT_MEMBER})
+    @ApiOperation(value = "查询单个共享规则详情")
     @GetMapping(value = "/{rule_id}")
     public ResponseEntity<AppServiceShareRuleVO> query(
-            @ApiParam(value = "项目Id", required = true)
             @PathVariable(value = "project_id") Long projectId,
+            @Encrypt
             @ApiParam(value = "规则Id", required = true)
             @PathVariable(value = "rule_id") Long ruleId) {
         return Optional.ofNullable(
@@ -125,21 +112,16 @@ public class AppShareRuleController {
                 .orElseThrow(() -> new CommonException("error.share.rule.query"));
     }
 
-    /**
-     * 删除单个服务共享规则详情
-     *
-     * @param projectId
-     * @param ruleId
-     * @return
-     */
-    @Permission(type = ResourceType.PROJECT, roles = {InitRoleCode.PROJECT_OWNER})
-    @ApiOperation(value = "删除服务共享规则")
+    @Permission(level = ResourceLevel.ORGANIZATION, roles = {InitRoleCode.PROJECT_OWNER})
+    @ApiOperation(value = "删除单个服务共享规则")
     @DeleteMapping(value = "/{rule_id}")
-    public ResponseEntity delete(@ApiParam(value = "项目Id", required = true)
-                                 @PathVariable(value = "project_id") Long projectId,
-                                 @ApiParam(value = "规则Id", required = true)
-                                 @PathVariable(value = "rule_id") Long ruleId) {
-        applicationShareService.delete(ruleId);
-        return new ResponseEntity(HttpStatus.NO_CONTENT);
+    public ResponseEntity<Void> delete(
+            @ApiParam(value = "项目Id", required = true)
+            @PathVariable(value = "project_id") Long projectId,
+            @Encrypt
+            @ApiParam(value = "规则Id", required = true)
+            @PathVariable(value = "rule_id") Long ruleId) {
+        applicationShareService.delete(projectId, ruleId);
+        return ResponseEntity.noContent().build();
     }
 }

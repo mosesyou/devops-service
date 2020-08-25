@@ -2,19 +2,25 @@ package io.choerodon.devops.app.service.impl;
 
 import java.util.List;
 
-import com.github.pagehelper.PageHelper;
-import com.github.pagehelper.PageInfo;
-import io.choerodon.base.domain.PageRequest;
-import io.choerodon.core.exception.CommonException;
-import io.choerodon.devops.api.vo.DevopsMergeRequestVO;
-import io.choerodon.devops.app.service.DevopsMergeRequestService;
-import io.choerodon.devops.infra.dto.DevopsMergeRequestDTO;
-import io.choerodon.devops.infra.mapper.DevopsMergeRequestMapper;
-import io.choerodon.devops.infra.util.PageRequestUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
+
+import io.choerodon.core.domain.Page;
+import io.choerodon.core.exception.CommonException;
+import io.choerodon.core.oauth.DetailsHelper;
+import io.choerodon.devops.api.vo.DevopsMergeRequestVO;
+import io.choerodon.devops.app.service.DevopsMergeRequestService;
+import io.choerodon.devops.app.service.SendNotificationService;
+import io.choerodon.devops.infra.dto.DevopsMergeRequestDTO;
+import io.choerodon.devops.infra.enums.MergeRequestState;
+import io.choerodon.devops.infra.mapper.DevopsMergeRequestMapper;
+import io.choerodon.devops.infra.util.PageRequestUtil;
+import io.choerodon.devops.infra.util.TypeUtil;
+import io.choerodon.mybatis.pagehelper.PageHelper;
+import io.choerodon.mybatis.pagehelper.domain.PageRequest;
 
 /**
  * Created by Sheep on 2019/7/15.
@@ -24,6 +30,9 @@ public class DevopsMergeRequestServiceImpl implements DevopsMergeRequestService 
     private static final Logger LOGGER = LoggerFactory.getLogger(DevopsMergeRequestServiceImpl.class);
     @Autowired
     private DevopsMergeRequestMapper devopsMergeRequestMapper;
+    @Autowired
+    @Lazy
+    private SendNotificationService sendNotificationService;
 
     @Override
     public List<DevopsMergeRequestDTO> baseListBySourceBranch(String sourceBranchName, Long gitLabProjectId) {
@@ -40,12 +49,19 @@ public class DevopsMergeRequestServiceImpl implements DevopsMergeRequestService 
     }
 
     @Override
-    public PageInfo<DevopsMergeRequestDTO> basePageByOptions(Integer gitlabProjectId, String state, PageRequest pageRequest) {
-        DevopsMergeRequestDTO devopsMergeRequestDTO = new DevopsMergeRequestDTO();
-        devopsMergeRequestDTO.setGitlabProjectId(gitlabProjectId.longValue());
-        devopsMergeRequestDTO.setState(state);
-        return PageHelper.startPage(pageRequest.getPage(), pageRequest.getSize(), PageRequestUtil.getOrderBy(pageRequest)).doSelectPageInfo(() ->
-                devopsMergeRequestMapper.select(devopsMergeRequestDTO));
+    public Page<DevopsMergeRequestDTO> basePageByOptions(Integer gitlabProjectId, String state, PageRequest pageable) {
+        // 如果传入的state字段是这个值，表明的是查询待这个用户审核的MergeRequest
+        if ("assignee".equals(state)) {
+            return PageHelper.doPageAndSort(PageRequestUtil.simpleConvertSortForPage(pageable), () ->
+                    devopsMergeRequestMapper.listToBeAuditedByThisUser(gitlabProjectId, DetailsHelper.getUserDetails() == null ? 0L : DetailsHelper.getUserDetails().getUserId()));
+        } else {
+            // 否则的话按照state字段查询
+            DevopsMergeRequestDTO devopsMergeRequestDTO = new DevopsMergeRequestDTO();
+            devopsMergeRequestDTO.setGitlabProjectId(gitlabProjectId.longValue());
+            devopsMergeRequestDTO.setState(state);
+            return PageHelper.doPageAndSort(PageRequestUtil.simpleConvertSortForPage(pageable), () ->
+                    devopsMergeRequestMapper.select(devopsMergeRequestDTO));
+        }
     }
 
     @Override
@@ -63,11 +79,12 @@ public class DevopsMergeRequestServiceImpl implements DevopsMergeRequestService 
 
     @Override
     public void create(DevopsMergeRequestVO devopsMergeRequestVO) {
-        baseCreate(voToDto(devopsMergeRequestVO));
+        baseCreate(devopsMergeRequestVO);
     }
 
     @Override
-    public void baseCreate(DevopsMergeRequestDTO devopsMergeRequestDTO) {
+    public void baseCreate(DevopsMergeRequestVO devopsMergeRequestVO) {
+        DevopsMergeRequestDTO devopsMergeRequestDTO = voToDto(devopsMergeRequestVO);
         Long gitlabProjectId = devopsMergeRequestDTO.getGitlabProjectId();
         Long gitlabMergeRequestId = devopsMergeRequestDTO.getGitlabMergeRequestId();
         DevopsMergeRequestDTO mergeRequestETemp = baseQueryByAppIdAndMergeRequestId(gitlabProjectId, gitlabMergeRequestId);
@@ -85,11 +102,22 @@ public class DevopsMergeRequestServiceImpl implements DevopsMergeRequestService 
                 throw new CommonException("error.update.merge.request");
             }
         }
+
+        // 发送关于Merge Request的相关通知
+        String operatorUserLoginName = devopsMergeRequestVO.getUser() == null ? null : devopsMergeRequestVO.getUser().getUsername();
+        Integer gitProjectId = TypeUtil.objToInteger(gitlabProjectId);
+        if (MergeRequestState.OPENED.getValue().equals(devopsMergeRequestDTO.getState())) {
+            sendNotificationService.sendWhenMergeRequestAuditEvent(gitProjectId, devopsMergeRequestDTO.getGitlabMergeRequestId());
+        } else if (MergeRequestState.CLOSED.getValue().equals(devopsMergeRequestDTO.getState())) {
+            sendNotificationService.sendWhenMergeRequestClosed(gitProjectId, devopsMergeRequestDTO.getGitlabMergeRequestId(), operatorUserLoginName);
+        } else if (MergeRequestState.MERGED.getValue().equals(devopsMergeRequestDTO.getState())) {
+            sendNotificationService.sendWhenMergeRequestPassed(gitProjectId, devopsMergeRequestDTO.getGitlabMergeRequestId(), operatorUserLoginName);
+        }
     }
 
     @Override
     public DevopsMergeRequestDTO baseCountMergeRequest(Integer gitlabProjectId) {
-        return devopsMergeRequestMapper.countMergeRequest(gitlabProjectId);
+        return devopsMergeRequestMapper.countMergeRequest(gitlabProjectId, DetailsHelper.getUserDetails() == null ? 0L : DetailsHelper.getUserDetails().getUserId());
     }
 
     private DevopsMergeRequestDTO voToDto(DevopsMergeRequestVO devopsMergeRequestVO) {

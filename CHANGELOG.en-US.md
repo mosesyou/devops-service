@@ -1,7 +1,151 @@
 # Changelog
 All notable changes to devops-service will be documented in this file.
 
-[0.15.0] - 2019-03-19
+## [0.22.3] 2020-08-01
+#### Add
+- Organizational layer "Management Center" added Webhook configuration function, support to create DingTalk, enterprise WeChat, Json type Webhook to send organization layer message notification
+- A new Webhook execution record page is added to the "Management Center" at the organization level and the "Settings-Notification" module at the project level, which supports viewing and retrying a certain Webhook execution record
+- The "Management Center" of the organization layer has a new function of "Role Management", which supports the organization administrator to create a custom role for the organization or project level here
+- The default message templates of Dingding, Enterprise WeChat, and Json type webhook corresponding to each event in the organization layer and project layer are added in "Platform Layer-Message Service"
+- Added a new type of "Ordinary Agile Project". This type of project only retains the functions related to agile testing and supports the project team to focus on the use of agile collaboration functions
+- Added "Operation and Maintenance Project" project type, which only retains DevOps-related functions such as development and deployment
+- The development module adds the function of "CI Pipeline", which supports the creation of multiple stages, and multiple tasks can be added to each stage
+- The CI pipeline interface supports configuration to add multiple types of tasks, including: build, code inspection and custom tasks
+- New build templates supporting multiple common languages ​​in the CI pipeline: such as Maven templates, Npm templates, and Go templates
+- Support to view the execution record details of each CI pipeline in the CI pipeline interface
+- "Application Deployment-Resources-Domain Name" module, when creating and modifying domain names, add support for filling in "Annotation"
+- The helm component of C7N agent is upgraded from V2 to V3
+- Upgrade the k8s version supported by the deployment module to V1.17
+
+#### fix
+- Fixed the issue of the node monitoring page being blank when not logged in to Grafana
+- Fixed the problem that the white screen occasionally appeared when clicking "Run Details-More Details" in the instance interface
+- Fixed the problem of incorrect judgment of whether pods can be increased or decreased after redeploying after modifying the number of pods in the running details of the instance interface
+- Fixed the issue of changing instance query values ​​interface parameters
+- Fixed the problem that the instance deployment timeout did not send the station letter
+- Fix the problem that the agent does not support StatefulSet
+- Fixed the problem that the existing port is not displayed in the port drop-down box when modifying the domain name
+- Fixed the issue that Choerodon was not aware of the RegistrySecret after being deleted in Kubernetes
+- Fixed the problem that Pod data was not synchronized after cluster reset
+- Fixed the issue that the timeout mechanism of Polaris scan did not take effect during query
+- Fixed an issue where the ChoerodonId used to create a cluster might be a pure numeric string
+- Deal with the situation where there are multiple resources including PV and PVC in one file
+- Fixed the problem that the cluster status in the tree structure is disorderly sorted on the cluster management page
+- Fixed the problem of inaccurate data when selecting the time range for the code submission graph and the construction frequency graph in the DevOps report
+- Fixed the issue that batch deployments were not filtered out when searching for deployment records based on running results
+- Fixed an issue where the command startup error in the selected microservice backend template was incorrect when importing application services
+
+
+#### optimization
+- Added the status and number of clusters in the platform to the platform overview interface
+- "Application Deployment-Resources" module, the environment level of instance view and resource view, the cluster to which they belong is added after the environment name
+- In "Platform Management-Mail Log", support for resending mails with "success" or "failure" status
+- In "Platform Management-Mail Log", it supports automatic clearing of sending records six months ago
+- "Organization layer-User management-Add organization user", "Project layer-Team member-Add team member", add the login name after the searched user
+- A quick copy button is added after the "Permission Code" and "Address" on the "Platform Management-Interface" page
+
+## [0.21.0] 2020-03-04
+
+#### Add
+- Added "component management" function to the cluster module, which supports the installation and uninstallation of management monitoring components (Prometheus, Grafana, AlertManager)
+- Added "cluster monitoring" function to the cluster module, and supports monitoring the resource usage of all nodes in the cluster on the premise that the monitoring components are installed
+- Added the "node monitoring" function to the detail page of each node in the cluster. After installing the monitoring component, it supports viewing the resource usage details of each node and the resource usage of all pods under the node
+- The cluster module has a new "health check" function and integrates Polaris components to support detection of configuration issues in the cluster and environment that may affect stability, reliability, scalability, and security
+- Instance view: Added the function of "health check" of the environment in the environment layer, which supports detection of configuration problems in each instance configuration file that may affect stability, reliability, scalability, and security
+- Resource view: Added "Commit Synchronization" display in the environment layer, which supports viewing the submission synchronization status and GitOps error log of the corresponding environment here
+- New "Batch Deployment" function in deployment module, instance view and resource view, which supports the function of batch deployment of multiple application services to the same environment at the same time
+- "Instance-Run Details -- More Details", added "YAML Format View" function, support to view details of instance configuration files in YAML format
+- Added "Reset Gitlab Password" function in "Personal Center", which supports resetting GitLab password with one click
+
+#### Fix
+- Fixed an issue where Pods could not be added or deleted after the instance update failed
+- Fixed the issue that every page of latest branch in continuous integration pipeline
+
+#### Optimization
+- Optimized the timeout logic of the application service creation process to avoid the situation that has been processing, resulting in the application service cannot be deleted
+- Optimized pull shared application service image
+- Optimized PV creation process, allowing users to directly assign permissions to specific projects to avoid incorrect binding
+- Optimized the display problem of "Instance-Run Details" interface and improved the display of missing fields
+- Added the status of clusters in the "owned cluster" column in the PV list
+- Added "PV type" display to PVC list
+- Added "Deployment Environment" column to the pipeline list to show the environment corresponding to the deployment tasks included in the pipeline
+
+#### Remove
+- Removed line chart of CPU and memory usage of Pods in "Resource View-Network Details" interface
+- Removed the list of memory and CPU usage in "Resource View-Environment Layer"
+
+## [0.20.0] 2019-12-09
+#### Add
+- Added "component management" function to the cluster module to support the management of the installation and uninstallation of CertManager components
+- New PV management function in the cluster module, which supports the creation and management of NFS and HostPath PVs in the cluster
+- Added manual resource configuration module in the manual deployment interface, which supports the creation of associated networks and domain names for corresponding instances during deployment
+- Added the function of deleting Pods in the Pod details page of the resource module instance layer, which supports deleting a Pod in the instance
+- Added full screen viewing when viewing instance events in the resource module instance layer
+- Added the function of deleting the disabled application service in the application service module, which supports deleting the disabled application service
+- Added "Recently used" shortcut in the drop-down box of the code management module to select the application service
+- "Code Management" module to copy the warehouse address, added support for copying the SSH address of the warehouse
+- New tab page of deployment configuration in the resource module "Instance view-environment layer", which supports people with environmental permissions to create and manage deployment configurations here
+- Added a quick entry to view all execution records of this pipeline in the pipeline list
+- Project layer-In the notification settings, new tab pages for agile messages, DevOps messages, and resource deletion verification are added. This page supports unified management of the sending methods and notification objects of various message notification events under the project
+#### FIX
+- Fixed issue where ciphertext was stored as plaintext in the environment library
+- Fixed the problem of inconsistent project data of imported shared services
+- Fixed the issue that when the first stage is empty in the manual trigger pipeline, the execution fails
+- Fixed the problem of service encoding and name length limitation when importing application services
+- Fixed an issue where the permission assignment interface must select a member when assigning permissions to specific members
+
+#### optimization
+- Optimized the logic of instance state and its corresponding Command state in the resource module instance layer
+- The Harbor library at the project level is made private by default
+- Optimized page jump after manual deployment
+- Optimized the sorting problem in the branch list
+- Optimized the status and corresponding operations in the environment configuration, and support the removal of the disabled and unconnected environments
+- Optimized configuration mapping and cipher text status display in resource module
+- Optimized the character limit of the app service name, relaxing it to 40 characters
+- Optimized the structure and message type of "Personal Center-Reception Settings"
+
+## [0.19.0] 2019-10-26
+#### New
+- Added "Application Service Details" interface, which contains details of an application service version, permission assignments, and sharing settings for the service
+- Added "Share Settings" function of application service, allowing project owners to share a specific version or type of application service to other projects in the organization
+- Add code libraries of other application services as templates to create an application service
+- Add the function of batch importing application services shared in the organization to this project
+- Added "Code Management" interface, which integrates all functions in the original development pipeline, retaining and highlighting common functions
+- New environment details interface for environment configuration module, which includes GitOps logs, deployment configuration and permission allocation in the corresponding environment
+- A new list of deployment records on the Deployment page, which includes all records and details generated by manual deployment and pipeline deployment
+- Added "resources" interface, which includes instance view and resource view, supports viewing resource details in an environment from the dimensions of application services and resources
+- Added "Custom Resources" interface in the "Resources" module, which supports adding and managing non-c7n-release type YAML files
+
+
+#### fix
+- Fixed instance code uniqueness check
+- Fixed the issue that the gitops file could not be found in the interface deployment in the case of devops-service service multiple instances
+- Fixed the issue of permission removal for disabled users in previous app services and environments
+- Fixed an issue where clicking Title sorting in the filter table would report an error
+- Fixed the problem of deleting the environment when the gitops library corresponding to the environment does not exist
+- Fixed an issue with 500 status codes when searching for non-existing app versions
+- Fixed an issue where the private service configuration associated with the application service was not created during deployment
+- Fixed the issue that when the instance with the same name is created after the instance is deleted, the instance associated with the network is not updated
+- Fixed the problem that domain name switching from common protocol to encryption protocol is invalid
+#### Optimization
+- "Application Services" module optimizes the steps of creating application services and supports the rapid creation of an application service
+- Integrate the "Notification Settings" in the component settings to the "Resource Security Settings" in the environment details interface of the environment configuration module, and support the configuration of the notification method (email, intranet message or SMS) and notification objects for deletion events in the corresponding environment
+- Optimized the "Application Service Deployment" page to support the quick deployment of instances on one page
+- Optimized the "Upgrade Instance" function of the original instance interface and changed it to "Change instance" to support rollback or upgrade to any version of the application service corresponding to the instance
+- Optimized the function logic of "redeploy" of the instance interface
+- Optimized the record overview interface of the CD pipeline and integrated it into the deployment record list
+- Moved the "Cluster Management" in the DevOps settings at the organization level to the "Deployment" module at the project level
+- Moved the "Certificate Management" in the DevOps settings at the organization level to the "Deployment" module at the project level
+
+
+#### Remove
+- Removed application templates at the organization level. If you want to select a template to create an application service, you can click the "Import Application Service" button in the application service interface and select: Import from GitHub-System Preset Template
+- Removed the component settings page in the project settings, supports directly modifying the default warehouse in the warehouse settings or advanced settings of the organization layer, project layer, application service layer
+- Removed notification settings in project settings and moved them to environment configuration module
+- Removed the application market module at the project level
+- Removed the function of "replace instance" in manual deployment. Need to rollback or upgrade instance in "change instance" in instance interface
+
+## [0.15.0] - 2019-03-19
 ###Added
 - Added the feature of automatic deployment in the deployment pipeline
 - Added the feature of elements setup and currently supports the creation of Docker repositories and Helm repositories for application selection in projects.

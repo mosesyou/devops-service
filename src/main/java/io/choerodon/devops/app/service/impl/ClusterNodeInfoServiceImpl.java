@@ -1,21 +1,7 @@
 package io.choerodon.devops.app.service.impl;
 
-import java.text.ParseException;
-import java.text.SimpleDateFormat;
-import java.util.List;
-import java.util.stream.Collectors;
-
 import com.alibaba.fastjson.JSONObject;
-import com.github.pagehelper.PageInfo;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.beans.BeanUtils;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.stereotype.Service;
-import org.springframework.util.StringUtils;
-
-import io.choerodon.base.domain.PageRequest;
+import io.choerodon.core.domain.Page;
 import io.choerodon.core.exception.CommonException;
 import io.choerodon.devops.api.vo.AgentNodeInfoVO;
 import io.choerodon.devops.api.vo.ClusterNodeInfoVO;
@@ -24,6 +10,20 @@ import io.choerodon.devops.app.service.DevopsClusterService;
 import io.choerodon.devops.infra.dto.DevopsClusterDTO;
 import io.choerodon.devops.infra.util.K8sUtil;
 import io.choerodon.devops.infra.util.TypeUtil;
+import io.choerodon.mybatis.pagehelper.domain.PageRequest;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.BeanUtils;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
+
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.util.List;
+import java.util.Objects;
+import java.util.stream.Collectors;
 
 /**
  * @author zmf
@@ -146,9 +146,11 @@ public class ClusterNodeInfoServiceImpl implements ClusterNodeInfoService {
     }
 
     @Override
-    public PageInfo<ClusterNodeInfoVO> pageClusterNodeInfo(Long clusterId, Long projectId, PageRequest pageRequest) {
-        long start = (long) (pageRequest.getPage() - 1) * (long) pageRequest.getSize();
-        long stop = start + (long) pageRequest.getSize() - 1;
+    public Page<ClusterNodeInfoVO> pageClusterNodeInfo(Long clusterId, Long projectId, PageRequest pageable) {
+        // 现在分页从0开始了
+        long start = (long) (pageable.getPage()) * (long) pageable.getSize();
+        // stop不怕越界， redis会将边界之前的最后的那些元素返回
+        long stop = start + (long) pageable.getSize() - 1;
         String redisKey = getRedisClusterKey(clusterId, projectId);
 
         long total = stringRedisTemplate.opsForList().size(redisKey);
@@ -158,16 +160,16 @@ public class ClusterNodeInfoServiceImpl implements ClusterNodeInfoService {
                 .stream()
                 .map(node -> JSONObject.parseObject(node, ClusterNodeInfoVO.class))
                 .collect(Collectors.toList());
-        PageInfo<ClusterNodeInfoVO> result = new PageInfo();
-        if (total < pageRequest.getSize() * pageRequest.getPage()) {
-            result.setSize(TypeUtil.objToInt(total) - (pageRequest.getSize() * (pageRequest.getPage() - 1)));
+        Page<ClusterNodeInfoVO> result = new Page<>();
+        if (total < pageable.getSize() * pageable.getPage()) {
+            result.setSize(TypeUtil.objToInt(total) - (pageable.getSize() * (pageable.getPage() - 1)));
         } else {
-            result.setSize(pageRequest.getSize());
+            result.setSize(pageable.getSize());
         }
-        result.setPageSize(pageRequest.getSize());
-        result.setPageNum(pageRequest.getPage());
-        result.setTotal(total);
-        result.setList(nodes);
+        result.setSize(pageable.getSize());
+        result.setNumber(pageable.getPage());
+        result.setTotalElements(total);
+        result.setContent(nodes);
         return result;
     }
 
@@ -193,17 +195,26 @@ public class ClusterNodeInfoServiceImpl implements ClusterNodeInfoService {
 
     @Override
     public List<String> queryNodeName(Long projectId, Long clusterId) {
-        String rediskey = getRedisClusterKey(clusterId, projectId);
+        DevopsClusterDTO devopsClusterDTO = devopsClusterService.baseQuery(clusterId);
+
+        String rediskey = getRedisClusterKey(clusterId, devopsClusterDTO.getProjectId());
 
         long total = stringRedisTemplate.opsForList().size(rediskey);
 
-        return stringRedisTemplate
+        return Objects.requireNonNull(stringRedisTemplate
                 .opsForList()
-                .range(rediskey, 0, total - 1)
+                .range(rediskey, 0, total - 1))
                 .stream()
                 .map(node -> JSONObject.parseObject(node, ClusterNodeInfoVO.class))
                 .map(ClusterNodeInfoVO::getNodeName)
                 .collect(Collectors.toList());
 
+    }
+
+    @Override
+    public long countNodes(Long projectId, Long clusterId) {
+        String key = getRedisClusterKey(clusterId, projectId);
+        Long count = stringRedisTemplate.opsForList().size(key);
+        return count == null ? 0 : count;
     }
 }

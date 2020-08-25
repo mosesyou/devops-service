@@ -3,7 +3,7 @@
   "routeName": "devops",
   "description": "",
   "license": "ISC",
-  "version": "0.20.0",
+  "version": "0.24.0",
   "keywords": [],
   "contributors": [
     "choerodon"
@@ -18,19 +18,18 @@
     "dist": "choerodon-front-boot dist --config ./react/config.js",
     "lint-staged": "lint-staged",
     "lint-staged:es": "eslint",
-    "compile": "choerodon-front-boot compile"
-  },
-  "peerDependencies": {
-    "@choerodon/boot": "0.19.x",
-    "@choerodon/master-pro": "0.19.x",
-    "choerodon-ui": "0.8.x"
+    "compile": "choerodon-front-boot compile",
+    "clean-install": "rm -rf node_modules && rm package-lock.json && npm i --registry https://nexus.choerodon.com.cn/repository/choerodon-npm && chmod -R u+x node_modules"
   },
   "dependencies": {
+    "choerodon-ui": "0.8.x",
     "diff-match-patch": "^1.0.4",
     "echarts": "^4.2.1",
     "echarts-for-react": "^2.0.12",
+    "js-base64": "^2.5.2",
     "js-file-download": "^0.4.8",
     "js-yaml": "^3.12.1",
+    "json-bigint": "^1.0.0",
     "mobx-react-lite": "^1.4.1",
     "moment": "^2.22.2",
     "quill-delta-to-html": "^0.8.4",
@@ -50,21 +49,19 @@
     "xterm": "^3.12.0"
   },
   "devDependencies": {
-    "@choerodon/boot": "0.19.x",
-    "@choerodon/master-pro": "0.19.x",
-    "babel-preset-env": "^1.7.0",
-    "choerodon-ui": "^0.8.19",
+    "@choerodon/boot": "0.22.0",
+    "@choerodon/master": "0.24.0",
+    "babel-eslint": "8.2.6",
+    "babel-preset-c7n-app": "^0.0.1",
     "del": "^4.1.1",
-    "eslint-plugin-react-hooks": "^1.7.0",
-    "gulp": "^3.9.1",
-    "gulp-babel": "^7.0.1",
-    "lodash": "latest",
-    "stylelint": "^9.5.0",
-    "stylelint-config-standard": "^18.2.0",
-    "through2": "^2.0.3",
-    "webpack": "^3.7.0",
-    "webpack-bundle-analyzer": "^3.1.0",
-    "webpack-dev-server": "^2.9.1"
+    "eslint": "^7.7.0",
+    "eslint-config-airbnb": "^18.2.0",
+    "eslint-config-c7n-app": "^0.0.1",
+    "eslint-plugin-import": "^2.22.0",
+    "eslint-plugin-jsx-a11y": "^6.3.1",
+    "eslint-plugin-react": "^7.20.6",
+    "eslint-plugin-react-hooks": "^4.1.0",
+    "lodash": "latest"
   },
   "lint-staged": {
     "react/**/*.{js,jsx}": [

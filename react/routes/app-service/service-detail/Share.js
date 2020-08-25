@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { TabPage, Content, Permission, Breadcrumb, Action } from '@choerodon/boot';
 import { Table, Modal } from 'choerodon-ui/pro';
 import { Button, Tooltip } from 'choerodon-ui';
+import { withRouter } from 'react-router-dom';
 import { FormattedMessage } from 'react-intl';
 import { useAppTopStore } from '../stores';
 import { useServiceDetailStore } from './stores';
@@ -16,19 +17,15 @@ const modalStyle = {
   width: 380,
 };
 
-const Share = () => {
+const Share = withRouter((props) => {
   const {
-    appServiceStore,
     intlPrefix,
     prefixCls,
   } = useAppTopStore();
   const {
     intl: { formatMessage },
     shareDs,
-    shareVersionsDs,
-    shareLevelDs,
     params: { id },
-    AppState: { currentMenuType: { projectId } },
     detailDs,
   } = useServiceDetailStore();
 
@@ -52,9 +49,9 @@ const Share = () => {
     return (
       <ClickText
         value={`#${value}`}
-        onClick={openModal}
+        onClick={() => openModal('edit')}
         clickAble
-        permissionCode={['devops-service.app-share-rule.update']}
+        permissionCode={['choerodon.code.project.develop.app-service.ps.share.update']}
       />
     );
   }
@@ -62,7 +59,7 @@ const Share = () => {
   function renderAction() {
     const actionData = [
       {
-        service: ['devops-service.app-share-rule.delete'],
+        service: ['choerodon.code.project.develop.app-service.ps.share.delete'],
         text: formatMessage({ id: 'delete' }),
         action: handleDelete,
       },
@@ -71,38 +68,24 @@ const Share = () => {
     return <Action data={actionData} />;
   }
 
-  function openModal(record) {
-    const type = shareDs.current.status !== 'add' ? 'edit' : 'add';
-    const isModify = shareDs.current.status !== 'add';
+  function openModal(type) {
+    const record = shareDs.current;
+    const isModify = type !== 'add';
+    const shareId = isModify ? record.get('id') : null;
     Modal.open({
       key: modalKey,
-      title: formatMessage({ id: `${intlPrefix}.share.rule.${isModify ? 'edit' : 'add'}` }),
+      title: formatMessage({ id: `${intlPrefix}.share.rule.${type}` }),
       children: <ShareRule
-        versionOptions={shareVersionsDs}
-        levelOptions={shareLevelDs}
-        record={record || shareDs.current}
         intlPrefix={intlPrefix}
         prefixCls={prefixCls}
-        formatMessage={formatMessage}
-        projectId={projectId}
         appServiceId={id}
-        store={appServiceStore}
-        dataSet={shareDs}
+        shareId={shareId}
+        refresh={refresh}
       />,
       drawer: true,
       style: modalStyle,
       okText: formatMessage({ id: isModify ? 'save' : 'add' }),
-      onCancel: handleCancel,
     });
-  }
-
-  function handleCancel() {
-    const { current } = shareDs;
-    if (current.status === 'add') {
-      shareDs.remove(current);
-    } else {
-      current.reset();
-    }
   }
 
   function handleDelete() {
@@ -117,11 +100,40 @@ const Share = () => {
     shareDs.delete(record, modalProps);
   }
 
+  function openDetail(appServiceIds) {
+    const {
+      history,
+      location,
+    } = props;
+    history.push(`/rducm/code-lib-management/assign${location.search}&appServiceIds=${appServiceIds}`);
+    // Modal.open({
+    //   key: modalKey1,
+    //   title: <Tips
+    //     helpText={formatMessage({ id: `${intlPrefix}.detail.allocation.tips` })}
+    //     title={formatMessage({ id: `${intlPrefix}.permission.manage` })}
+    //   />,
+    //   children: <ServicePermission
+    //     dataSet={permissionDs}
+    //     baseDs={detailDs}
+    //     store={appServiceStore}
+    //     nonePermissionDs={nonePermissionDs}
+    //     intlPrefix="c7ncd.deployment"
+    //     prefixCls={prefixCls}
+    //     formatMessage={formatMessage}
+    //     projectId={id}
+    //     refresh={refresh}
+    //   />,
+    //   drawer: true,
+    //   style: modalStyle,
+    //   okText: formatMessage({ id: 'save' }),
+    // });
+  }
+
   function renderButtons() {
     const isStop = detailDs.current && !detailDs.current.get('active');
-    return (
+    return [
       <Permission
-        service={['devops-service.app-share-rule.create']}
+        service={['choerodon.code.project.develop.app-service.ps.share.add']}
       >
         <Tooltip
           title={isStop ? <FormattedMessage id={`${intlPrefix}.button.disabled`} /> : ''}
@@ -129,14 +141,24 @@ const Share = () => {
         >
           <Button
             icon="playlist_add"
-            onClick={() => openModal(shareDs.create())}
+            onClick={() => openModal('add')}
             disabled={isStop}
           >
             <FormattedMessage id={`${intlPrefix}.share.rule.add`} />
           </Button>
         </Tooltip>
-      </Permission>
-    );
+      </Permission>,
+      <Permission
+        service={['choerodon.code.project.develop.app-service.ps.permission.update']}
+      >
+        <Button
+          icon="authority"
+          onClick={() => openDetail(props.match.params.id)}
+        >
+          权限管理
+        </Button>
+      </Permission>,
+    ];
   }
 
   function handleTableFilter(record) {
@@ -151,16 +173,7 @@ const Share = () => {
 
   return (
     <TabPage
-      service={[
-        'devops-service.app-service.query',
-        'devops-service.app-service.update',
-        'devops-service.app-service.updateActive',
-        'devops-service.app-share-rule.create',
-        'devops-service.app-share-rule.update',
-        'devops-service.app-share-rule.delete',
-        'devops-service.app-share-rule.query',
-        'devops-service.app-share-rule.pageByOptions',
-      ]}
+      service={['choerodon.code.project.develop.app-service.ps.share']}
     >
       <HeaderButtons>
         {renderButtons()}
@@ -173,8 +186,8 @@ const Share = () => {
       </HeaderButtons>
       <Breadcrumb title={getTitle()} />
       <Content className={`${prefixCls}-detail-content`}>
-        <Table dataSet={shareDs} filter={handleTableFilter}>
-          <Column name="id" renderer={renderNumber} align="left" />
+        <Table dataSet={shareDs} filter={handleTableFilter} pristine>
+          <Column name="id" renderer={renderNumber} align="left" sortable />
           <Column renderer={renderAction} width="0.7rem" />
           <Column name="versionType" />
           <Column name="version" sortable />
@@ -183,6 +196,6 @@ const Share = () => {
       </Content>
     </TabPage>
   );
-};
+});
 
 export default Share;

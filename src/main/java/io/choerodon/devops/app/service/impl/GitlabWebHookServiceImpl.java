@@ -12,6 +12,10 @@ import io.choerodon.devops.api.vo.JobWebHookVO;
 import io.choerodon.devops.api.vo.PipelineWebHookVO;
 import io.choerodon.devops.api.vo.PushWebHookVO;
 import io.choerodon.devops.app.service.*;
+import io.choerodon.devops.infra.constant.GitOpsConstants;
+import io.choerodon.devops.infra.dto.iam.IamUserDTO;
+import io.choerodon.devops.infra.feign.operator.BaseServiceClientOperator;
+import io.choerodon.devops.infra.util.CustomContextUtil;
 import io.choerodon.devops.infra.util.FastjsonParserConfigProvider;
 
 @Service
@@ -23,13 +27,27 @@ public class GitlabWebHookServiceImpl implements GitlabWebHookService {
     private DevopsGitService devopsGitService;
     private DevopsGitlabCommitService devopsGitlabCommitService;
     private DevopsGitlabPipelineService devopsGitlabPipelineService;
+    private DevopsCiPipelineRecordService devopsCiPipelineRecordService;
+    private DevopsCiJobRecordService devopsCiJobRecordService;
+    private BaseServiceClientOperator baseServiceClientOperator;
+    private DevopsCdPipelineService devopsCdPipelineService;
 
-    public GitlabWebHookServiceImpl(DevopsMergeRequestService devopsMergeRequestService, DevopsGitService devopsGitService, DevopsGitlabCommitService devopsGitlabCommitService,
-                                    DevopsGitlabPipelineService devopsGitlabPipelineService) {
+    public GitlabWebHookServiceImpl(DevopsMergeRequestService devopsMergeRequestService,
+                                    DevopsGitService devopsGitService,
+                                    DevopsGitlabCommitService devopsGitlabCommitService,
+                                    DevopsGitlabPipelineService devopsGitlabPipelineService,
+                                    DevopsCiPipelineRecordService devopsCiPipelineRecordService,
+                                    DevopsCiJobRecordService devopsCiJobRecordService,
+                                    BaseServiceClientOperator baseServiceClientOperator,
+                                    DevopsCdPipelineService devopsCdPipelineService) {
         this.devopsMergeRequestService = devopsMergeRequestService;
         this.devopsGitService = devopsGitService;
-        this.devopsGitlabPipelineService = devopsGitlabPipelineService;
         this.devopsGitlabCommitService = devopsGitlabCommitService;
+        this.devopsGitlabPipelineService = devopsGitlabPipelineService;
+        this.devopsCiPipelineRecordService = devopsCiPipelineRecordService;
+        this.devopsCiJobRecordService = devopsCiJobRecordService;
+        this.baseServiceClientOperator = baseServiceClientOperator;
+        this.devopsCdPipelineService = devopsCdPipelineService;
     }
 
     @Override
@@ -39,14 +57,12 @@ public class GitlabWebHookServiceImpl implements GitlabWebHookService {
         switch (kind) {
             case "merge_request":
                 DevopsMergeRequestVO devopsMergeRequestVO = JSONArray.parseObject(body, DevopsMergeRequestVO.class, FastjsonParserConfigProvider.getParserConfig());
-                if (LOGGER.isInfoEnabled()) {
-                    LOGGER.info(devopsMergeRequestVO.toString());
-                }
-
+                setUserContext(devopsMergeRequestVO.getUser().getUsername());
                 devopsMergeRequestService.create(devopsMergeRequestVO);
                 break;
             case "push":
                 PushWebHookVO pushWebHookVO = JSONArray.parseObject(body, PushWebHookVO.class, FastjsonParserConfigProvider.getParserConfig());
+                setUserContext(pushWebHookVO.getUserUserName());
                 if (LOGGER.isInfoEnabled()) {
                     LOGGER.info(pushWebHookVO.toString());
                 }
@@ -55,15 +71,20 @@ public class GitlabWebHookServiceImpl implements GitlabWebHookService {
                 break;
             case "pipeline":
                 PipelineWebHookVO pipelineWebHookVO = JSONArray.parseObject(body, PipelineWebHookVO.class, FastjsonParserConfigProvider.getParserConfig());
-
                 devopsGitlabPipelineService.create(pipelineWebHookVO, token);
+                // 保存ci流水线执行记录
+                devopsCiPipelineRecordService.create(pipelineWebHookVO, token);
+                // 处理流水线执行成功逻辑, 只处理纯cd流水线逻辑
+                devopsCdPipelineService.handlerCiPipelineStatusSuccess(pipelineWebHookVO, token);
                 break;
             case "build":
                 JobWebHookVO jobWebHookVO = JSONArray.parseObject(body, JobWebHookVO.class, FastjsonParserConfigProvider.getParserConfig());
                 devopsGitlabPipelineService.updateStages(jobWebHookVO);
+                devopsCiJobRecordService.update(jobWebHookVO);
                 break;
             case "tag_push":
                 PushWebHookVO tagPushWebHookVO = JSONArray.parseObject(body, PushWebHookVO.class, FastjsonParserConfigProvider.getParserConfig());
+                setUserContext(tagPushWebHookVO.getUserUserName());
                 devopsGitlabCommitService.create(tagPushWebHookVO, token);
                 break;
             default:
@@ -80,7 +101,28 @@ public class GitlabWebHookServiceImpl implements GitlabWebHookService {
             if (LOGGER.isDebugEnabled()) {
                 LOGGER.debug(pushWebHookVO.toString());
             }
+            // 不处理删除环境库的分支的情况
+            if (GitOpsConstants.NO_COMMIT_SHA.equals(pushWebHookVO.getAfter())) {
+                LOGGER.debug("GitOps PushWebHook is ignored due to branch deleting. Ref: {}", pushWebHookVO.getRef());
+                return;
+            }
+            // 只处理master分支的commit, 不处理其他分支的commit
+            if (!GitOpsConstants.MASTER_REF.equals(pushWebHookVO.getRef())) {
+                LOGGER.debug("GitOps PushWebHook of ref {} is ignored because the ref is not master.", pushWebHookVO.getRef());
+                return;
+            }
             devopsGitService.fileResourceSyncSaga(pushWebHookVO, token);
+        }
+    }
+
+    private void setUserContext(String loginName) {
+        try {
+            IamUserDTO iamUserDTO = baseServiceClientOperator.queryUserByLoginName(loginName);
+            if (iamUserDTO != null) {
+                CustomContextUtil.setUserContext(iamUserDTO.getId());
+            }
+        } catch (Exception ex) {
+            LOGGER.info("Failed to query user by login name {}", loginName);
         }
     }
 }

@@ -2,10 +2,10 @@ package io.choerodon.devops.app.service;
 
 import java.util.List;
 
-import com.github.pagehelper.PageInfo;
-import io.choerodon.base.domain.PageRequest;
+import io.choerodon.core.domain.Page;
 import io.choerodon.devops.api.vo.DevopsMergeRequestVO;
 import io.choerodon.devops.infra.dto.DevopsMergeRequestDTO;
+import io.choerodon.mybatis.pagehelper.domain.PageRequest;
 
 /**
  * Created by Sheep on 2019/7/15.
@@ -16,7 +16,7 @@ public interface DevopsMergeRequestService {
 
     DevopsMergeRequestDTO baseQueryByAppIdAndMergeRequestId(Long projectId, Long gitlabMergeRequestId);
 
-    PageInfo<DevopsMergeRequestDTO> basePageByOptions(Integer gitlabProjectId, String state, PageRequest pageRequest);
+    Page<DevopsMergeRequestDTO> basePageByOptions(Integer gitlabProjectId, String state, PageRequest pageable);
 
     List<DevopsMergeRequestDTO> baseQueryByGitlabProjectId(Integer gitlabProjectId);
 
@@ -24,7 +24,7 @@ public interface DevopsMergeRequestService {
 
     void create(DevopsMergeRequestVO devopsMergeRequestVO);
 
-    void baseCreate(DevopsMergeRequestDTO devopsMergeRequestDTO);
+    void baseCreate(DevopsMergeRequestVO devopsMergeRequestVO);
 
     DevopsMergeRequestDTO baseCountMergeRequest(Integer gitlabProjectId);
 }

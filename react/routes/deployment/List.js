@@ -1,25 +1,28 @@
 import React, { Fragment, useEffect, useState } from 'react';
 import { Page, Content, Header, Permission, Action, Breadcrumb, Choerodon } from '@choerodon/boot';
-import { Table, Modal, Select, Form } from 'choerodon-ui/pro';
+import { Table, Modal, Select, Form, Icon } from 'choerodon-ui/pro';
 import { Button, Tooltip } from 'choerodon-ui';
 import { FormattedMessage } from 'react-intl';
 import { withRouter } from 'react-router-dom';
 import { observer } from 'mobx-react-lite';
-import map from 'lodash/map';
 import { useDeployStore } from './stores';
 import StatusTag from '../../components/status-tag';
 import TimePopover from '../../components/timePopover/TimePopover';
 import UserInfo from '../../components/userInfo';
 import { handlePromptError } from '../../utils';
+import checkPermission from '../../utils/checkPermission';
 import Process from './modals/process';
 import ManualDetail from './modals/manualDetail';
 import AutoDetail from './modals/autoDetail';
 import Deploy from './modals/deploy';
+import BatchDeploy from './modals/batch-deploy';
+import BatchDetail from './modals/batch-detail';
 import ClickText from '../../components/click-text';
 import PendingCheckModal from './components/pendingCheckModal';
 import Tips from '../../components/new-tips';
 
 import './index.less';
+import MouserOverWrapper from '../../components/MouseOverWrapper';
 
 const { Column } = Table;
 const { Option } = Select;
@@ -27,6 +30,7 @@ const modalKey1 = Modal.key();
 const modalKey2 = Modal.key();
 const modalKey3 = Modal.key();
 const modalKey4 = Modal.key();
+const batchDeployModalKey = Modal.key();
 const modalStyle1 = {
   width: 380,
 };
@@ -42,24 +46,29 @@ const STATUS = ['success', 'failed', 'deleted', 'pendingcheck', 'stop', 'running
 const Deployment = withRouter(observer((props) => {
   const {
     intl: { formatMessage },
-    AppState: { currentMenuType: { id } },
+    AppState: { currentMenuType: { id, projectId } },
     intlPrefix,
     prefixCls,
     permissions,
     listDs,
-    pipelineDs,
     detailDs,
     deployStore,
     pipelineStore,
-    manualDeployDs,
-    tableSelectDs,
     envOptionsDs,
     pipelineOptionsDs,
   } = useDeployStore();
 
   const [showPendingCheck, serShowPendingCheck] = useState(false);
+  const [canDetail, setCanDetail] = useState(false);
 
   useEffect(() => {
+    async function init() {
+      const res = await checkPermission({ projectId, code: 'choerodon.code.project.deploy.app-deployment.deployment-operation.ps.detail' });
+      if (res) {
+        setCanDetail(true);
+      }
+    }
+    init();
     const { location: { search } } = props;
     const param = search.match(/(^|&)pipelineRecordId=([^&]*)(&|$)/);
     const newDeployId = param && param[2];
@@ -84,50 +93,73 @@ const Deployment = withRouter(observer((props) => {
         title={formatMessage({ id: `${intlPrefix}.start` })}
       />,
       children: <Process
-        store={deployStore}
+        deployStore={deployStore}
         refresh={refresh}
-        projectId={id}
-        dataSet={pipelineDs}
         intlPrefix={intlPrefix}
         prefixCls={prefixCls}
       />,
       okText: formatMessage({ id: 'startUp' }),
-      afterClose: () => pipelineDs.clearCachedSelected(),
     });
   }
 
   async function openDetail(pipelineRecordId, type) {
     const deployType = type || listDs.current.get('deployType');
     const deployId = pipelineRecordId || listDs.current.get('deployId');
+    const manualTitle = (
+      <span className={`${prefixCls}-detail-modal-title`}>
+        部署“
+        <MouserOverWrapper width="160px" text={`#${deployId}`}>
+          <span>{`#${deployId}`}</span>
+        </MouserOverWrapper>
+        ”的详情
+      </span>
+    );
     let params;
-    if (deployType === 'auto') {
-      detailDs.transport.read.url = `/devops/v1/projects/${id}/pipeline/${deployId}/record_detail`;
-      await detailDs.query();
+    switch (deployType) {
+      case 'auto':
+        detailDs.transport.read.url = `/devops/v1/projects/${id}/pipeline/${deployId}/record_detail`;
+        await detailDs.query();
 
-      params = {
-        style: modalStyle2,
-        children: <AutoDetail
-          dataSet={detailDs}
-          id={deployId}
-          projectId={id}
-          PipelineStore={pipelineStore}
-          intlPrefix={intlPrefix}
-          prefixCls={prefixCls}
-          refresh={refresh}
-        />,
-      };
-    } else {
-      detailDs.transport.read.url = `/devops/v1/projects/${id}/app_service_instances/query_by_command/${listDs.current.get('deployId')}`;
-      await detailDs.query();
+        params = {
+          style: modalStyle2,
+          children: <AutoDetail
+            dataSet={detailDs}
+            id={deployId}
+            projectId={id}
+            PipelineStore={pipelineStore}
+            intlPrefix={intlPrefix}
+            prefixCls={prefixCls}
+            refresh={refresh}
+          />,
+        };
+        break;
+      case 'manual':
+        detailDs.transport.read.url = `/devops/v1/projects/${id}/app_service_instances/query_by_command/${listDs.current.get('deployId')}`;
+        await detailDs.query();
 
-      params = {
-        style: modalStyle1,
-        children: <ManualDetail
-          record={detailDs.current}
-          intlPrefix={intlPrefix}
-          prefixCls={prefixCls}
-        />,
-      };
+        params = {
+          style: modalStyle1,
+          title: manualTitle,
+          children: <ManualDetail
+            record={detailDs.current}
+            intlPrefix={intlPrefix}
+            prefixCls={prefixCls}
+          />,
+        };
+        break;
+      case 'batch':
+        params = {
+          style: modalStyle1,
+          title: manualTitle,
+          children: <BatchDetail
+            recordId={deployId}
+            intlPrefix={intlPrefix}
+            prefixCls={prefixCls}
+          />,
+        };
+        break;
+      default:
+        break;
     }
 
     Modal.open({
@@ -170,26 +202,42 @@ const Deployment = withRouter(observer((props) => {
   }
 
   function openDeploy() {
-    manualDeployDs.reset();
-    manualDeployDs.create();
     Modal.open({
       key: modalKey4,
       style: modalStyle2,
       drawer: true,
       title: formatMessage({ id: `${intlPrefix}.manual` }),
       children: <Deploy
-        dataSet={manualDeployDs}
-        store={deployStore}
-        refresh={refresh}
-        projectId={id}
+        deployStore={deployStore}
+        refresh={deployAfter}
         intlPrefix={intlPrefix}
         prefixCls={prefixCls}
-        record={manualDeployDs.current}
       />,
       afterClose: () => {
-        manualDeployDs.reset();
         deployStore.setCertificates([]);
         deployStore.setAppService([]);
+        deployStore.setConfigValue('');
+      },
+      okText: formatMessage({ id: 'deployment' }),
+    });
+  }
+
+  function openBatchDeploy() {
+    Modal.open({
+      key: batchDeployModalKey,
+      style: modalStyle2,
+      drawer: true,
+      title: formatMessage({ id: `${intlPrefix}.batch` }),
+      children: <BatchDeploy
+        deployStore={deployStore}
+        refresh={deployAfter}
+        intlPrefix={intlPrefix}
+        prefixCls={prefixCls}
+      />,
+      afterClose: () => {
+        deployStore.setCertificates([]);
+        deployStore.setAppService([]);
+        deployStore.setShareAppService([]);
         deployStore.setConfigValue('');
       },
       okText: formatMessage({ id: 'deployment' }),
@@ -215,17 +263,42 @@ const Deployment = withRouter(observer((props) => {
     history.push(`/devops/resource${search}`);
   }
 
+  function deployAfter(instance, type = 'instance') {
+    const { history, location: { search } } = props;
+
+    if (!instance) history.push(`/devops/resource${search}`);
+
+    history.push({
+      pathname: '/devops/resource',
+      search,
+      state: {
+        instanceId: instance.id,
+        appServiceId: instance.appServiceId,
+        envId: instance.envId,
+        viewType: type,
+      },
+    });
+  }
+
   function renderNumber({ value, record }) {
+    const errorInfo = record.get('errorInfo');
+    const deployStatus = record.get('deployStatus');
+    const letter = (record.get('deployType') || 'M').slice(0, 1).toUpperCase();
     return (
       <Fragment>
         <div className={`${prefixCls}-content-table-mark ${prefixCls}-content-table-mark-${record.get('deployType')}`}>
-          <span>{record.get('deployType') === 'auto' ? 'A' : 'M'}</span>
+          <span>{letter}</span>
         </div>
         <ClickText
           value={`#${value}`}
-          clickAble
+          clickAble={canDetail}
           onClick={openDetail}
         />
+        {errorInfo && deployStatus === 'failed' && (
+          <Tooltip title={errorInfo}>
+            <Icon type="error" className={`${prefixCls}-content-icon-failed`} />
+          </Tooltip>
+        )}
       </Fragment>
     );
   }
@@ -234,7 +307,10 @@ const Deployment = withRouter(observer((props) => {
     return value && <FormattedMessage id={`${intlPrefix}.${value}`} />;
   }
 
-  function renderDeployStatus({ value }) {
+  function renderDeployStatus({ value, record }) {
+    if (record.get('deployType') === 'batch') {
+      return;
+    }
     const newValue = value === 'running' || value === 'operating' ? 'executing' : value;
     const message = newValue === 'stop' ? 'terminated' : newValue;
     return (
@@ -276,21 +352,21 @@ const Deployment = withRouter(observer((props) => {
       switch (record.get('deployStatus')) {
         case 'failed':
           actionData = [{
-            service: ['devops-service.pipeline.retry'],
+            service: ['choerodon.code.project.deploy.app-deployment.deployment-operation.ps.retry'],
             text: formatMessage({ id: `${intlPrefix}.retry` }),
             action: () => openOperatingModal('retry'),
           }];
           break;
         case 'running':
           actionData = [{
-            service: ['devops-service.pipeline.failed'],
+            service: ['choerodon.code.project.deploy.app-deployment.deployment-operation.ps.failed'],
             text: formatMessage({ id: `${intlPrefix}.failed` }),
             action: () => openOperatingModal('failed'),
           }];
           break;
         case 'pendingcheck':
           execute && (actionData = [{
-            service: ['devops-service.pipeline.audit'],
+            service: ['choerodon.code.project.deploy.app-deployment.deployment-operation.ps.check'],
             text: formatMessage({ id: `${intlPrefix}.check` }),
             action: () => serShowPendingCheck(true),
           }]);
@@ -298,10 +374,10 @@ const Deployment = withRouter(observer((props) => {
         default:
           break;
       }
-    } else {
+    } else if (record.get('deployType') === 'manual') {
       actionData = [{
         text: formatMessage({ id: `${intlPrefix}.view.instance` }),
-        service: ['devops-service.devops-environment.listByActive'],
+        service: ['choerodon.code.project.deploy.app-deployment.deployment-operation.ps.view'],
         action: () => linkToInstance(record),
       }];
     }
@@ -313,13 +389,19 @@ const Deployment = withRouter(observer((props) => {
     isLoad && refresh();
   }
 
+  function getBackPath() {
+    const { location: { state } } = props;
+    const { backPath } = state || {};
+    return backPath || '';
+  }
+
   return (
     <Page
-      service={permissions}
+      service={['choerodon.code.project.deploy.app-deployment.deployment-operation.ps.default']}
     >
-      <Header title={<FormattedMessage id="app.head" />}>
+      <Header title={<FormattedMessage id="app.head" />} backPath={getBackPath()}>
         <Permission
-          service={['devops-service.app-service-instance.deploy']}
+          service={['choerodon.code.project.deploy.app-deployment.deployment-operation.ps.manual']}
         >
           <Button
             icon="jsfiddle"
@@ -329,7 +411,17 @@ const Deployment = withRouter(observer((props) => {
           </Button>
         </Permission>
         <Permission
-          service={['devops-service.pipeline.batchExecute']}
+          service={['choerodon.code.project.deploy.app-deployment.deployment-operation.ps.batch']}
+        >
+          <Button
+            icon="jsfiddle"
+            onClick={openBatchDeploy}
+          >
+            <FormattedMessage id={`${intlPrefix}.batch`} />
+          </Button>
+        </Permission>
+        <Permission
+          service={['choerodon.code.project.deploy.app-deployment.deployment-operation.ps.start-flow']}
         >
           <Button
             icon="playlist_play"

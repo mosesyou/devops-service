@@ -4,20 +4,24 @@ import java.util.List;
 import java.util.Map;
 
 import io.swagger.annotations.ApiModelProperty;
+import org.hzero.starter.keyencrypt.core.Encrypt;
 
 /**
  * Created by Zenger on 2018/4/19.
  */
 public class DevopsServiceVO extends DevopsResourceDataInfoVO {
-
+    @Encrypt
     private Long id;
     private String name;
     private String status;
+    @Encrypt
     private Long envId;
     private String envName;
     private String type;
     private Boolean envStatus;
+    @Encrypt
     private Long appServiceId;
+    @Encrypt
     private Long appServiceProjectId;
     private String appServiceName;
     private String dns;
@@ -26,6 +30,7 @@ public class DevopsServiceVO extends DevopsResourceDataInfoVO {
      */
     @ApiModelProperty("网络本身的标签")
     private Map<String, String> labels;
+    private Map<String, String> selectors;
     private DevopsServiceTargetVO target;
     private DevopsServiceConfigVO config;
     private String commandType;
@@ -198,5 +203,13 @@ public class DevopsServiceVO extends DevopsResourceDataInfoVO {
 
     public void setLabels(Map<String, String> labels) {
         this.labels = labels;
+    }
+
+    public Map<String, String> getSelectors() {
+        return selectors;
+    }
+
+    public void setSelectors(Map<String, String> selectors) {
+        this.selectors = selectors;
     }
 }

@@ -1,4 +1,4 @@
-import React, { createContext, useContext } from 'react';
+import React, { createContext, useContext, useEffect } from 'react';
 import { inject } from 'mobx-react';
 import { injectIntl } from 'react-intl';
 
@@ -15,7 +15,7 @@ export const StoreProvider = injectIntl(inject('AppState')(
     const value = {
       ...props,
       permissions: [
-        'devops-service.certification.create',
+        'choerodon.code.project.deploy.app-deployment.resource.ps.create-certifications',
       ],
     };
     return (

@@ -3,10 +3,10 @@
 
 <mapper namespace="io.choerodon.devops.infra.mapper.DevopsClusterMapper">
     <select id="listByProjectId" resultType="io.choerodon.devops.infra.dto.DevopsClusterDTO">
-        select dc.id,dc.`name` from devops_cluster dc where dc.skip_check_project_permission is true and
+        select dc.id,dc.`name`,dc.skip_check_project_permission from devops_cluster dc where dc.skip_check_project_permission is true and
         dc.organization_id = #{organizationId}
         UNION ALL
-        select dc.id,dc.`name` from devops_cluster dc
+        select dc.id,dc.`name`,dc.skip_check_project_permission from devops_cluster dc
         join devops_cluster_pro_rel dcp on dc.id = dcp.cluster_id
         where dcp.project_id = #{projectId}
     </select>
@@ -27,15 +27,15 @@
         <if test='searchParam != null'>
             <if test='searchParam.code != null and searchParam.code.length > 0'>
                 AND
-                    dc.code LIKE CONCAT(CONCAT('%', #{searchParam.code, jdbcType=VARCHAR}),'%')
+                dc.code LIKE CONCAT(CONCAT('%', #{searchParam.code, jdbcType=VARCHAR}),'%')
             </if>
             <if test='searchParam.name != null and searchParam.name.length > 0'>
                 AND
-                    dc.name LIKE CONCAT(CONCAT('%', #{searchParam.name, jdbcType=VARCHAR}),'%')
+                dc.name LIKE CONCAT(CONCAT('%', #{searchParam.name, jdbcType=VARCHAR}),'%')
             </if>
             <if test='searchParam.description != null and searchParam.description.length > 0'>
                 AND
-                    dc.name LIKE CONCAT(CONCAT('%', #{searchParam.description, jdbcType=VARCHAR}),'%')
+                dc.name LIKE CONCAT(CONCAT('%', #{searchParam.description, jdbcType=VARCHAR}),'%')
             </if>
         </if>
         <if test='params != null and params.size > 0'>
@@ -56,7 +56,7 @@
         INNER JOIN devops_env env ON instance.env_id = env.id
         INNER JOIN devops_cluster cluster ON env.cluster_id = cluster.id
         WHERE cluster.id = #{clusterId}
-          AND pod.node_name = #{nodeName}
+        AND pod.node_name = #{nodeName}
         <if test='searchParam != null'>
             <if test='searchParam.name != null and searchParam.name.length > 0'>
                 AND pod.name LIKE CONCAT(CONCAT('%', #{searchParam.name, jdbcType=VARCHAR}),'%')
@@ -92,4 +92,32 @@
         WHERE project_id IS NULL
     </select>
 
+    <select id="queryClusterForUpdate" resultType="io.choerodon.devops.infra.dto.DevopsClusterDTO">
+        SELECT *
+        FROM devops_cluster
+        WHERE id = #{clusterId,jdbcType=BIGINT}
+        FOR UPDATE;
+    </select>
+    <select id="queryClusterIdBySystemEnvId" resultType="java.lang.Long">
+        SELECT dc.id FROM devops_cluster dc WHERE dc.system_env_id=#{systemEnvId}
+    </select>
+    <select id="listByOrganizationId" resultType="io.choerodon.devops.infra.dto.DevopsClusterDTO">
+        SELECT
+        dc.id
+        FROM
+        devops_cluster dc
+        WHERE dc.organization_id=#{organizationId}
+    </select>
+
+    <select id="countByOptions" resultType="int">
+        SELECT COUNT(1)
+        FROM devops_cluster dc
+        WHERE 1 = 1
+        <if test="organizationId != null">
+            AND dc.organization_id = #{organizationId,jdbcType=BIGINT}
+        </if>
+        <if test="projectId != null">
+            AND dc.project_id = #{projectId,jdbcType=BIGINT}
+        </if>
+    </select>
 </mapper>

@@ -5,6 +5,7 @@ import _ from 'lodash';
 import { Button, Modal, Collapse, Spin } from 'choerodon-ui';
 import Store from '../../stores';
 import SimpleTable from './SimpleTable';
+import YamlEditor from '../../../../../../../components/yamlEditor';
 
 import './index.less';
 
@@ -12,9 +13,11 @@ const { Sidebar } = Modal;
 const { Panel } = Collapse;
 
 const PANEL_TYPE = [
+  'ports',
   'volume',
   'health',
   'security',
+  'label',
   'variables',
 ];
 
@@ -28,6 +31,7 @@ export default class DetailsSidebar extends Component {
 
   state = {
     activeKey: [],
+    isJson: true,
   };
 
   handlePanelChange = (key) => {
@@ -39,6 +43,12 @@ export default class DetailsSidebar extends Component {
     this.setState((prev) => ({
       isExpand: !prev.isExpand,
       activeKey: !prev.isExpand ? PANEL_TYPE : [],
+    }));
+  };
+
+  handleChangeType = () => {
+    this.setState((prev) => ({
+      isJson: !prev.isJson,
     }));
   };
 
@@ -129,6 +139,109 @@ export default class DetailsSidebar extends Component {
     return envContent;
   };
 
+  renderPorts(containers) {
+    let portsContent = null;
+    let hasPorts = false;
+
+    if (containers && containers.length) {
+      const colItems = ['name', 'containerPort', 'protocol', 'hostPort'];
+      const columns = _.map(colItems, item => ({
+        title: <FormattedMessage id={`ist.deploy.ports.${item}`} />,
+        key: item,
+        dataIndex: item,
+        render: textOrNA,
+      }));
+
+      portsContent = _.map(containers, item => {
+        const { name, ports } = item;
+        if (ports && ports.length) {
+          hasPorts = true;
+        }
+        return (
+          <Fragment key={name}>
+            <div className="c7ncd-deploy-container-title">
+              <span className="c7ncd-deploy-container-name">{name}</span>
+              {this.containerLabel}
+            </div>
+            <div className="c7ncd-deploy-container-table">
+              <SimpleTable columns={columns} data={ports && ports.slice()} />
+            </div>
+          </Fragment>
+        );
+      });
+    } else {
+      portsContent = (
+        <div className="c7ncd-deploy-detail-empty">
+          <FormattedMessage id="ist.deploy.ports.map" />
+          <FormattedMessage id="ist.deploy.ports.empty" />
+        </div>
+      );
+    }
+
+    if (!hasPorts) {
+      portsContent = (
+        <div className="c7ncd-deploy-detail-empty">
+          <FormattedMessage id="ist.deploy.ports.map" />
+          <FormattedMessage id="ist.deploy.ports.empty" />
+        </div>
+      );
+    }
+
+    return portsContent;
+  }
+
+
+  renderLabel = (labels, annotations) => {
+    /**
+     * 表格数据
+     * @param {object} obj
+     * @param {array} col
+     */
+    function format(obj, col) {
+      const arr = [];
+      // eslint-disable-next-line no-restricted-syntax
+      for (const key in obj) {
+        // eslint-disable-next-line no-prototype-builtins
+        if (obj.hasOwnProperty(key)) {
+          const value = obj[key];
+          arr.push({ key, value });
+        }
+      }
+      return (
+        <div className="c7ncd-deploy-container-table">
+          <SimpleTable columns={columns} data={arr} />
+        </div>
+      );
+    }
+
+    const columns = [
+      {
+        width: '50%',
+        title: <FormattedMessage id="ist.deploy.key" />,
+        key: 'key',
+        dataIndex: 'key',
+      },
+      {
+        width: '50%',
+        title: <FormattedMessage id="ist.deploy.value" />,
+        key: 'value',
+        dataIndex: 'value',
+      },
+    ];
+
+    const labelContent = format(labels, columns);
+    const annoContent = format(annotations, columns);
+
+    return (
+      <Fragment>
+        <div className="c7ncd-deploy-label">Labels</div>
+        {labelContent}
+        <div className="c7ncd-deploy-label">Annotations</div>
+        {annoContent}
+      </Fragment>
+    );
+  };
+
   renderVolume = (containers, volumes) => {
     let volumeContent = null;
 
@@ -196,7 +309,7 @@ export default class DetailsSidebar extends Component {
       let capAdd = [];
       let capDrop = [];
 
-      if (capabilities) {
+      if (!_.isEmpty(capabilities)) {
         capAdd = capabilities.add;
         capDrop = capabilities.drop;
       }
@@ -257,29 +370,40 @@ export default class DetailsSidebar extends Component {
   render() {
     const { detailsStore, intl: { formatMessage } } = this.context;
     const { visible, onClose } = this.props;
-    const { activeKey, isExpand } = this.state;
+    const { activeKey, isExpand, isJson } = this.state;
     const {
       getDeployments: { detail },
+      getDeploymentsYaml,
     } = detailsStore;
 
     let containers = [];
     let volumes = [];
     let hostIPC = null;
     let hostNetwork = null;
+    let labels = [];
+    let annotations = [];
 
-    if (detail && detail.spec && detail.spec.template && detail.spec.template.spec) {
-      const spec = detail.spec.template.spec;
-      containers = spec.containers;
-      volumes = spec.volumes;
-      hostIPC = spec.hostIPC;
-      hostNetwork = spec.hostNetwork;
+    if (detail) {
+      if (detail.metadata) {
+        labels = detail.metadata.labels;
+        annotations = detail.metadata.annotations;
+      }
+      if (detail.spec && detail.spec.template && detail.spec.template.spec) {
+        const spec = detail.spec.template.spec;
+        containers = spec.containers;
+        volumes = spec.volumes;
+        hostIPC = spec.hostIPC;
+        hostNetwork = spec.hostNetwork;
+      }
     }
 
     const renderFun = {
+      ports: () => this.renderPorts(containers),
       volume: () => this.renderVolume(containers, volumes),
       health: () => this.renderHealth(containers),
       variables: () => this.renderVar(containers),
       security: () => this.renderSecurity(containers, hostIPC, hostNetwork),
+      label: () => this.renderLabel(labels, annotations),
     };
 
     return (<Sidebar
@@ -295,40 +419,56 @@ export default class DetailsSidebar extends Component {
           <FormattedMessage id="close" />
         </Button>,
       ]}
-      title={formatMessage({ id: 'ist.deploy.detail' })}
+      title={formatMessage({ id: `ist.deploy.${detail ? detail.kind : 'Deployment'}.detail` })}
     >
       <div className="c7ncd-expand-btn-wrap">
         <Button
-          className="c7ncd-expand-btn"
-          onClick={this.handleExpandAll}
+          className="c7ncd-deploy-detail-type-btn"
+          onClick={this.handleChangeType}
         >
-          <FormattedMessage id={isExpand ? 'collapseAll' : 'expandAll'} />
+          <FormattedMessage id={`ist.deploy.type.${isJson ? 'yaml' : 'json'}`} />
         </Button>
-      </div>
-      <Collapse
-        bordered={false}
-        activeKey={activeKey}
-        onChange={this.handlePanelChange}
-      >
-        {_.map(PANEL_TYPE, (item) => (
-          <Panel
-            key={item}
-            header={
-              <div className="c7ncd-deploy-panel-header">
-                <div className="c7ncd-deploy-panel-title">
-                  <FormattedMessage id={`ist.deploy.${item}`} />
-                </div>
-                <div className="c7ncd-deploy-panel-text">
-                  <FormattedMessage id={`ist.deploy.${item}.describe`} />
-                </div>
-              </div>
-            }
-            className="c7ncd-deploy-panel"
+        {isJson && (
+          <Button
+            className="c7ncd-expand-btn"
+            onClick={this.handleExpandAll}
           >
-            {visible && renderFun[item]()}
-          </Panel>
-        ))}
-      </Collapse>
+            <FormattedMessage id={isExpand ? 'collapseAll' : 'expandAll'} />
+          </Button>
+        )}
+      </div>
+      {isJson ? (
+        <Collapse
+          bordered={false}
+          activeKey={activeKey}
+          onChange={this.handlePanelChange}
+        >
+          {_.map(PANEL_TYPE, (item) => (
+            <Panel
+              key={item}
+              header={
+                <div className="c7ncd-deploy-panel-header">
+                  <div className="c7ncd-deploy-panel-title">
+                    <FormattedMessage id={`ist.deploy.${item}`} />
+                  </div>
+                  <div className="c7ncd-deploy-panel-text">
+                    <FormattedMessage id={`ist.deploy.${item}.describe`} />
+                  </div>
+                </div>
+              }
+              className="c7ncd-deploy-panel"
+            >
+              {visible && renderFun[item]()}
+            </Panel>
+          ))}
+        </Collapse>
+      ) : (
+        <YamlEditor
+          value={getDeploymentsYaml}
+          originValue={getDeploymentsYaml}
+          readOnly
+        />
+      )}
     </Sidebar>);
   }
 }

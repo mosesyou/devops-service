@@ -4,6 +4,7 @@ import java.util.HashMap;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonValue;
+
 import io.choerodon.devops.api.vo.kubernetes.MemberHelper;
 
 
@@ -46,29 +47,20 @@ public enum AccessLevel {
      * @param value String
      */
     public static AccessLevel forString(String value, MemberHelper memberHelper) {
-        switch (value) {
-            case "ORGANIZATION.GITLAB.OWNER":
-                memberHelper.setOrganizationAccessLevel(AccessLevel.OWNER);
-                return AccessLevel.OWNER;
-            case "PROJECT.GITLAB.OWNER":
-                memberHelper.setProjectOwnerAccessLevel(AccessLevel.OWNER);
-                return AccessLevel.OWNER;
-            case "GITLAB.MASTER":
-                return AccessLevel.MASTER;
-            case "PROJECT.GITLAB.DEVELOPER":
-                memberHelper.setProjectDevelopAccessLevel(AccessLevel.DEVELOPER);
-                return AccessLevel.DEVELOPER;
-            case "PROJECT.DEPLOY.ADMIN":
-                return AccessLevel.OWNER;
-            case "GITLAB.REPORTER":
-                return AccessLevel.REPORTER;
-            case "GITLAB.GUEST":
-                return AccessLevel.GUEST;
-            case "GITLAB.NONE":
-                return AccessLevel.NONE;
-            default:
-                return AccessLevel.NONE;
+        LabelType gitlabRoleLabel = LabelType.forValue(value);
+        if (gitlabRoleLabel != null) {
+            switch (gitlabRoleLabel) {
+                case GITLAB_PROJECT_OWNER:
+                    memberHelper.setProjectOwnerAccessLevel(AccessLevel.OWNER);
+                    return AccessLevel.OWNER;
+                case GITLAB_PROJECT_DEVELOPER:
+                    memberHelper.setProjectDevelopAccessLevel(AccessLevel.DEVELOPER);
+                    return AccessLevel.DEVELOPER;
+                default:
+                    return AccessLevel.NONE;
+            }
         }
+        return AccessLevel.NONE;
     }
 
     @JsonValue
@@ -79,5 +71,33 @@ public enum AccessLevel {
     @Override
     public String toString() {
         return this.value.toString();
+    }
+
+    public static String getAccessLevelName(Integer value) {
+        AccessLevel accessLevel = AccessLevel.forValue(value);
+        String accessLevelName;
+        switch (accessLevel) {
+            case NONE:
+                accessLevelName = "NONE";
+                break;
+            case GUEST:
+                accessLevelName = "Guest";
+                break;
+            case REPORTER:
+                accessLevelName = "Reporter";
+                break;
+            case DEVELOPER:
+                accessLevelName = "Developer";
+                break;
+            case MASTER:
+                accessLevelName = "Maintainer";
+                break;
+            case OWNER:
+                accessLevelName = "Owner";
+                break;
+            default:
+                accessLevelName = "NONE";
+        }
+        return accessLevelName;
     }
 }

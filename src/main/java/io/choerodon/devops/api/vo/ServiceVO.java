@@ -1,6 +1,6 @@
 package io.choerodon.devops.api.vo;
 
-import java.util.List;
+import org.hzero.starter.keyencrypt.core.Encrypt;
 
 /**
  * Created by younger on 2018/4/25.
@@ -13,7 +13,6 @@ public class ServiceVO {
     private String port;
     private String targetPort;
     private String age;
-    private List<IngressVO> ingressVOS;
 
     public String getName() {
         return name;
@@ -70,6 +69,4 @@ public class ServiceVO {
     public void setTargetPort(String targetPort) {
         this.targetPort = targetPort;
     }
-
-
 }

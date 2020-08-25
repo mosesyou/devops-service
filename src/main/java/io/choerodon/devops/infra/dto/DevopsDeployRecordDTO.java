@@ -5,20 +5,26 @@ import javax.persistence.*;
 
 import io.swagger.annotations.ApiModelProperty;
 
-import io.choerodon.mybatis.entity.BaseDTO;
+import io.choerodon.mybatis.annotation.ModifyAudit;
+import io.choerodon.mybatis.annotation.VersionAudit;
+import io.choerodon.mybatis.domain.AuditDomain;
 
 /**
  * Created by Sheep on 2019/7/29.
  */
-
+@ModifyAudit
+@VersionAudit
 @Table(name="devops_deploy_record")
-public class DevopsDeployRecordDTO extends BaseDTO {
+public class DevopsDeployRecordDTO extends AuditDomain {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @GeneratedValue(strategy = GenerationType.AUTO)
     private Long id;
+    @ApiModelProperty("项目id")
     private Long projectId;
+    @ApiModelProperty("部署类型: auto / manual / batch")
     private String deployType;
+    @ApiModelProperty("部署id：对于type为manual，是实例的CommandId，对于type是auto，是流水线纪录id，对于type是batch，此值为null")
     private Long deployId;
     private String env;
     private Date deployTime;
@@ -43,6 +49,9 @@ public class DevopsDeployRecordDTO extends BaseDTO {
     @Transient
     @ApiModelProperty("手动部署的实例的应用服务id")
     private Long appServiceId;
+
+    @Transient
+    private String errorInfo;
 
     @Transient
     private String envName;
@@ -171,5 +180,13 @@ public class DevopsDeployRecordDTO extends BaseDTO {
     public String getEnvName() {
 
         return envName;
+    }
+
+    public String getErrorInfo() {
+        return errorInfo;
+    }
+
+    public void setErrorInfo(String errorInfo) {
+        this.errorInfo = errorInfo;
     }
 }

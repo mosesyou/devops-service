@@ -1,21 +1,22 @@
 package io.choerodon.devops.infra.dto;
 
-import javax.persistence.GeneratedValue;
-import javax.persistence.GenerationType;
-import javax.persistence.Id;
-import javax.persistence.Table;
+import io.choerodon.mybatis.annotation.ModifyAudit;
+import io.choerodon.mybatis.annotation.VersionAudit;
+import io.choerodon.mybatis.domain.AuditDomain;
 
-import io.choerodon.mybatis.entity.BaseDTO;
+import javax.persistence.*;
 
 /**
  * Creator: ChangpingShi0213@gmail.com
  * Date:  19:29 2019/4/3
  * Description:
  */
+@ModifyAudit
+@VersionAudit
 @Table(name = "devops_pipeline_stage_record")
-public class PipelineStageRecordDTO extends BaseDTO {
+public class PipelineStageRecordDTO extends AuditDomain {
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @GeneratedValue(strategy = GenerationType.AUTO)
     private Long id;
     private Long pipelineRecordId;
     private String status;
@@ -26,6 +27,9 @@ public class PipelineStageRecordDTO extends BaseDTO {
     private Long stageId;
     private String stageName;
     private String auditUser;
+
+    @Transient
+    private String pipelineName;
 
     public PipelineStageRecordDTO(Long projectId, Long pipelineRecordId) {
         this.pipelineRecordId = pipelineRecordId;
@@ -115,4 +119,12 @@ public class PipelineStageRecordDTO extends BaseDTO {
         this.isParallel = isParallel;
     }
 
+    public String getPipelineName() {
+        return pipelineName;
+    }
+
+    public PipelineStageRecordDTO setPipelineName(String pipelineName) {
+        this.pipelineName = pipelineName;
+        return this;
+    }
 }

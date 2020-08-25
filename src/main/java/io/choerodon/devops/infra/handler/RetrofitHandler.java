@@ -19,7 +19,6 @@ import retrofit2.converter.gson.GsonConverterFactory;
 
 import io.choerodon.core.exception.CommonException;
 import io.choerodon.devops.infra.config.ConfigurationProperties;
-import io.choerodon.devops.infra.feign.MarketServicePublicClient;
 import io.choerodon.devops.infra.feign.SonarClient;
 
 public class RetrofitHandler {
@@ -43,12 +42,11 @@ public class RetrofitHandler {
 
         OkHttpClient okHttpClient = getOkHttpClient(configurationProperties.getInsecureSkipTlsVerify(), configurationProperties.getType(), token);
 
-        Retrofit retrofit = new Retrofit.Builder()
+        return new Retrofit.Builder()
                 .baseUrl(configurationProperties.getBaseUrl())
                 .client(okHttpClient)
                 .addConverterFactory(GsonConverterFactory.create())
                 .build();
-        return retrofit;
     }
 
     private static OkHttpClient getOkHttpClient(Boolean insecureSkipTlsVerify, String type, String token) {
@@ -120,19 +118,29 @@ public class RetrofitHandler {
                 });
                 return okHttpClientBuilder.build();
             } else {
-                OkHttpClient.Builder okHttpClientBuilder = new OkHttpClient.Builder();
-                okHttpClientBuilder.interceptors().add((Interceptor.Chain chain) -> {
-                    Request original = chain.request();
-                    Request.Builder requestBuilder = original.newBuilder()
-                            .header("Authorization", token);
-                    Request request = requestBuilder.build();
-                    return chain.proceed(request);
-                });
-                return okHttpClientBuilder.build();
+                return RetrofitHandler.buildWithToken(token);
             }
         } else {
-            return new OkHttpClient.Builder().build();
+            return RetrofitHandler.buildWithToken(token);
         }
+    }
+
+    /**
+     * basic的token来创建client
+     *
+     * @param token basic认证的token
+     * @return client
+     */
+    public static OkHttpClient buildWithToken(String token) {
+        OkHttpClient.Builder okHttpClientBuilder = new OkHttpClient.Builder();
+        okHttpClientBuilder.interceptors().add((Interceptor.Chain chain) -> {
+            Request original = chain.request();
+            Request.Builder requestBuilder = original.newBuilder()
+                    .header("Authorization", token);
+            Request request = requestBuilder.build();
+            return chain.proceed(request);
+        });
+        return okHttpClientBuilder.build();
     }
 
     public static SonarClient getSonarClient(String sonarqubeUrl, String sonar, String userName, String password) {
@@ -145,14 +153,4 @@ public class RetrofitHandler {
         Retrofit retrofit = RetrofitHandler.initRetrofit(configurationProperties);
         return retrofit.create(SonarClient.class);
     }
-
-    public static MarketServicePublicClient getMarketServiceClient(String getawayUrl, String type) {
-        ConfigurationProperties configurationProperties = new ConfigurationProperties();
-        configurationProperties.setBaseUrl(getawayUrl);
-        configurationProperties.setInsecureSkipTlsVerify(false);
-        configurationProperties.setType(type);
-        Retrofit retrofit = RetrofitHandler.initRetrofit(configurationProperties);
-        return retrofit.create(MarketServicePublicClient.class);
-    }
-
 }

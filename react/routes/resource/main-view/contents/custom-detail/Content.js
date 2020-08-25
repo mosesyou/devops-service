@@ -46,7 +46,9 @@ const Content = observer(() => {
       const env = record.get('envCode');
       try {
         const wsHost = removeEndsChar(window._env_.DEVOPS_HOST, '/');
-        const url = `${wsHost}/devops/describe?key=cluster:${clusterId}.describe:${uuidv1()}&env=${env}&kind=${kind}&name=${name}&describeId=${id}`;
+        const key = `cluster:${clusterId}.describe:${uuidv1()}`;
+        const secretKey = window._env_.DEVOPS_WEBSOCKET_SECRET_KEY;
+        const url = `${wsHost}/websocket?key=${key}&group=from_front:${key}&processor=front_describe&secret_key=${secretKey}&env=${env}&kind=${kind}&name=${name}&describeId=${id}&clusterId=${clusterId}`;
         ws = new WebSocket(url);
         ws.addEventListener('message', handleMessage);
         ws.addEventListener('error', handleError);
@@ -58,7 +60,9 @@ const Content = observer(() => {
 
   function handleMessage({ data }) {
     try {
-      setValue(JSON.parse(data).data);
+      const message = JSON.parse(data).message;
+      const newMessage = message && JSON.parse(message) ? JSON.parse(message).payload || '' : '';
+      setValue(newMessage);
       setLoading(false);
       destroySocket();
     } catch (e) {

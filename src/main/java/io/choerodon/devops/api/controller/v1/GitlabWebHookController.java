@@ -1,12 +1,8 @@
 package io.choerodon.devops.api.controller.v1;
 
-import javax.servlet.http.HttpServletRequest;
 import java.util.List;
 import java.util.Map;
-
-import io.choerodon.base.annotation.Permission;
-import io.choerodon.devops.app.service.AppServiceInstanceService;
-import io.choerodon.devops.app.service.GitlabWebHookService;
+import javax.servlet.http.HttpServletRequest;
 
 import io.swagger.annotations.ApiOperation;
 import io.swagger.annotations.ApiParam;
@@ -17,6 +13,10 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+
+import io.choerodon.devops.app.service.AppServiceInstanceService;
+import io.choerodon.devops.app.service.GitlabWebHookService;
+import io.choerodon.swagger.annotation.Permission;
 
 @RestController
 @RequestMapping(value = "/webhook")
@@ -30,7 +30,7 @@ public class GitlabWebHookController {
     @Permission(permissionPublic = true)
     @ApiOperation(value = "webhook转发")
     @PostMapping
-    public ResponseEntity forwardGitlabWebHook(HttpServletRequest httpServletRequest, @RequestBody String body) {
+    public ResponseEntity<Void> forwardGitlabWebHook(HttpServletRequest httpServletRequest, @RequestBody String body) {
         gitlabWebHookService.forwardingEventToPortal(body, httpServletRequest.getHeader("X-Gitlab-Token"));
         return new ResponseEntity<>(HttpStatus.NO_CONTENT);
     }
@@ -38,15 +38,11 @@ public class GitlabWebHookController {
     @Permission(permissionPublic = true)
     @ApiOperation(value = "gitops webhook转发")
     @PostMapping(value = "/git_ops")
-    public ResponseEntity gitOpsWebHook(HttpServletRequest httpServletRequest, @RequestBody String body) {
+    public ResponseEntity<Void> gitOpsWebHook(HttpServletRequest httpServletRequest, @RequestBody String body) {
         gitlabWebHookService.gitOpsWebHook(body, httpServletRequest.getHeader("X-Gitlab-Token"));
         return new ResponseEntity<>(HttpStatus.NO_CONTENT);
     }
 
-    /**
-     * 查询自动化测试应用实例状态
-     * @param testReleases
-     */
     @ApiOperation(value = "查询自动化测试应用实例状态")
     @Permission(permissionPublic = true)
     @PostMapping("/get_test_status")

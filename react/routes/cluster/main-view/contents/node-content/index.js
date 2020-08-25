@@ -1,9 +1,14 @@
 import React from 'react';
+import { Permission } from '@choerodon/boot';
 import { NodeContentStoreProvider } from './stores';
-import NodeContent from './NodeContent';
+import Content from './Content';
 
 export default (props) => (
-  <NodeContentStoreProvider {...props}>
-    <NodeContent />
-  </NodeContentStoreProvider>
+  <Permission
+    service={['choerodon.code.project.deploy.cluster.cluster-management.ps.node']}
+  >
+    <NodeContentStoreProvider {...props}>
+      <Content />
+    </NodeContentStoreProvider>
+  </Permission>
 );

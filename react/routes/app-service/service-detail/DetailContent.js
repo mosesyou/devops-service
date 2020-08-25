@@ -17,6 +17,10 @@ const DetailContent = observer(() => {
   const {
     intl: { formatMessage },
     detailDs,
+    access: {
+      accessPermission,
+      accessShare,
+    },
   } = useServiceDetailStore();
 
   return (<Page
@@ -29,15 +33,15 @@ const DetailContent = observer(() => {
         component={Version}
         alwaysShow
       />
-      <PageTab
-        title={<Tips
-          helpText={formatMessage({ id: `${intlPrefix}.detail.permission.tips` })}
-          title={formatMessage({ id: `${intlPrefix}.permission` })}
-        />}
-        tabKey="Allocation"
-        component={Allocation}
-        alwaysShow={appServiceStore.getProjectRole === 'owner'}
-      />
+      {/* <PageTab */}
+      {/*  title={<Tips */}
+      {/*    helpText={formatMessage({ id: `${intlPrefix}.detail.permission.tips` })} */}
+      {/*    title={formatMessage({ id: `${intlPrefix}.permission` })} */}
+      {/*  />} */}
+      {/*  tabKey="Allocation" */}
+      {/*  component={Allocation} */}
+      {/*  alwaysShow={accessPermission} */}
+      {/* /> */}
       <PageTab
         title={<Tips
           helpText={formatMessage({ id: `${intlPrefix}.detail.share.tips` })}
@@ -45,7 +49,7 @@ const DetailContent = observer(() => {
         />}
         tabKey="Share"
         component={Share}
-        alwaysShow={appServiceStore.getProjectRole === 'owner' && detailDs.current && detailDs.current.get('type') === 'normal'}
+        alwaysShow={accessShare && detailDs.current && detailDs.current.get('type') === 'normal'}
       />
     </PageWrap>
   </Page>);

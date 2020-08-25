@@ -9,7 +9,6 @@ import { useEnvironmentStore } from '../../../../stores';
 import { useMainStore } from '../../../stores';
 import { useDetailStore } from '../stores';
 import useStore from './useStore';
-import ResourceSetting from './resource-setting/notificationsHome';
 import EnvCreateForm from '../../../modals/env-create';
 import GroupForm from '../../../modals/GroupForm';
 import DeployConfigForm from './deploy-config';
@@ -48,7 +47,7 @@ const EnvModals = observer(() => {
   } = useEnvironmentStore();
   const { groupFormDs } = useMainStore();
   const {
-    intl: { formatMessage },
+    formatMessage,
     intlPrefix,
     prefixCls,
     detailStore,
@@ -64,6 +63,7 @@ const EnvModals = observer(() => {
     configFormDs,
     checkEnvExist,
     baseDs,
+    nonePermissionDs,
   } = useDetailStore();
 
   function refresh() {
@@ -135,20 +135,18 @@ const EnvModals = observer(() => {
     });
   }
 
-  async function addUsers(data) {
-    const { id, objectVersionNumber } = getSelectedMenu;
-    const users = {
-      projectId,
-      envId: id,
-      objectVersionNumber,
-      ...data,
-    };
-    return modalStore.addUsers(users);
-  }
-
   function openPermission() {
-    const { id, skipCheckPermission } = getSelectedMenu;
-    modalStore.loadUsers(projectId, id);
+    const modalPorps = {
+      dataSet: permissionsDs,
+      nonePermissionDs,
+      formatMessage,
+      store: modalStore,
+      baseDs,
+      intlPrefix,
+      prefixCls,
+      refresh,
+      projectId,
+    };
     Modal.open({
       key: permissionKey,
       title: <Tips
@@ -159,27 +157,8 @@ const EnvModals = observer(() => {
       className: 'c7ncd-modal-wrapper',
       style: modalStyle,
       children: <Permission
-        store={modalStore}
-        onOk={addUsers}
-        intlPrefix={intlPrefix}
-        prefixCls={prefixCls}
-        skipPermission={skipCheckPermission}
-        refresh={toPermissionTab}
+        {...modalPorps}
       />,
-      afterClose: () => {
-        modalStore.setUsers([]);
-      },
-    });
-  }
-
-  function resourceSetting() {
-    const { id } = getSelectedMenu;
-    Modal.open({
-      key: resourceKey,
-      title: formatMessage({ id: `${currentIntlPrefix}.resource.setting` }),
-      children: <ResourceSetting envId={id} />,
-      drawer: true,
-      style: configModalStyle,
     });
   }
 
@@ -209,12 +188,14 @@ const EnvModals = observer(() => {
 
   function getButtons() {
     return [{
+      permissions: ['choerodon.code.project.deploy.environment.ps.detail-create-env'],
       name: formatMessage({ id: `${currentIntlPrefix}.create` }),
       icon: 'playlist_add',
       handler: openEnvModal,
       display: true,
       group: 1,
     }, {
+      permissions: ['choerodon.code.project.deploy.environment.ps.detail-create-config'],
       disabled,
       name: formatMessage({ id: `${currentIntlPrefix}.create.config` }),
       icon: 'playlist_add',
@@ -222,6 +203,7 @@ const EnvModals = observer(() => {
       display: true,
       group: 1,
     }, {
+      permissions: ['choerodon.code.project.deploy.environment.ps.permission'],
       disabled,
       name: formatMessage({ id: `${intlPrefix}.modal.permission` }),
       icon: 'authority',
@@ -247,7 +229,6 @@ const EnvModals = observer(() => {
     e.domEvent.stopPropagation();
     const handlerMapping = {
       [ITEM_GROUP]: openGroupModal,
-      [ITEM_SAFETY]: resourceSetting,
     };
 
     const handler = handlerMapping[e.key];
@@ -258,11 +239,6 @@ const EnvModals = observer(() => {
     display: true,
     key: ITEM_GROUP,
     text: formatMessage({ id: `${currentIntlPrefix}.group.create` }),
-  }, {
-    display: true,
-    key: ITEM_SAFETY,
-    text: formatMessage({ id: `${currentIntlPrefix}.resource.setting` }),
-    disabled,
   }]), [disabled]);
 
   return <HeaderButtons items={getButtons()}>

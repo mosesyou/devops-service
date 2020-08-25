@@ -8,16 +8,21 @@ import _ from 'lodash';
 import classnames from 'classnames';
 import MouserOverWrapper from '../../../../../../components/MouseOverWrapper/MouserOverWrapper';
 import StatusIcon from '../../../../../../components/StatusIcon';
-import { handlePromptError } from '../../../../../../utils';
 import { useResourceStore } from '../../../../stores';
 import { useApplicationStore } from '../stores';
-import DomainModal from '../modals/domain';
-import EditNetwork from '../modals/network/network-edit';
+import EditNetwork from '../modals/network2';
 import { useMainStore } from '../../../stores';
+import DomainForm from '../../../components/domain-form';
 
 import './index.less';
 
+
 const { Column } = Table;
+const editNetWorkKey = Modal.key();
+const editDomainKey = Modal.key();
+const modalStyle = {
+  width: 740,
+};
 
 const Networking = observer(() => {
   const {
@@ -34,10 +39,6 @@ const Networking = observer(() => {
     networkStore,
   } = useApplicationStore();
   const { mainStore: { openDeleteModal } } = useMainStore();
-
-  const [showDomain, setShowDomain] = useState(false);
-  const [domainId, setDomainId] = useState(null);
-  const [showNetwork, setShowNetwork] = useState(false);
 
   function refresh() {
     treeDs.query();
@@ -61,18 +62,20 @@ const Networking = observer(() => {
       error={error || ''}
       clickAble={!disabled}
       onClick={openNetworkEdit}
-      permissionCode={['devops-service.devops-service.update']}
+      permissionCode={['choerodon.code.project.deploy.app-deployment.resource.ps.net-detail']}
     />);
   }
 
   function renderTargetType({ record }) {
-    const { instances, labels } = record.get('target') || {};
+    const { instances, selectors, targetAppServiceId } = record.get('target') || {};
     const appId = record.get('appServiceId');
 
     let type = 'EndPoints';
-    if (appId && instances && instances.length) {
+    if (targetAppServiceId) {
+      type = formatMessage({ id: 'all_instance' });
+    } else if (instances && instances.length) {
       type = formatMessage({ id: 'instance' });
-    } else if (labels) {
+    } else if (selectors) {
       type = formatMessage({ id: 'label' });
     }
 
@@ -80,11 +83,17 @@ const Networking = observer(() => {
   }
 
   function renderTarget({ record }) {
-    const { instances, labels, endPoints } = record.get('target') || {};
+    const { instances, selectors, endPoints, targetAppServiceId, targetAppServiceName } = record.get('target') || {};
     const node = [];
     const port = [];
     const len = endPoints ? 2 : 1;
-    if (instances && instances.length) {
+    if (targetAppServiceId && targetAppServiceName) {
+      node.push(
+        <div className="net-target-item">
+          <span>{targetAppServiceName}</span>
+        </div>
+      );
+    } else if (instances && instances.length) {
       _.forEach(instances, ({ id: itemId, code, status }) => {
         const targetClass = classnames({
           'net-target-item': true,
@@ -104,8 +113,8 @@ const Networking = observer(() => {
         }
       });
     }
-    if (!_.isEmpty(labels)) {
-      _.forEach(labels, (value, key) => node.push(
+    if (!_.isEmpty(selectors)) {
+      _.forEach(selectors, (value, key) => node.push(
         <div className="net-target-item" key={key}>
           <span>{key}</span>=<span>{value}</span>
         </div>,
@@ -258,7 +267,7 @@ const Networking = observer(() => {
     }
     const buttons = [
       {
-        service: ['devops-service.devops-service.delete'],
+        service: ['choerodon.code.project.deploy.app-deployment.resource.ps.delete-net'],
         text: formatMessage({ id: 'delete' }),
         action: () => openDeleteModal(parentId, netId, name, 'service', refresh),
       },
@@ -268,23 +277,39 @@ const Networking = observer(() => {
   }
 
   function openDomainEdit(itemId) {
-    setDomainId(itemId);
-    setShowDomain(true);
-  }
-
-  function closeDomainEdit(isLoad) {
-    setDomainId(null);
-    setShowDomain(false);
-    isLoad && refresh();
+    Modal.open({
+      key: editDomainKey,
+      style: modalStyle,
+      drawer: true,
+      title: formatMessage({ id: 'domain.update.head' }),
+      children: <DomainForm
+        envId={parentId}
+        appServiceId={id}
+        ingressId={itemId}
+        ingressStore={domainStore}
+        refresh={refresh}
+        intlPrefix={intlPrefix}
+        prefixCls={prefixCls}
+      />,
+      okText: formatMessage({ id: 'save' }),
+    });
   }
 
   function openNetworkEdit() {
-    setShowNetwork(true);
-  }
-
-  function closeNetworkEdit(isLoad) {
-    setShowNetwork(false);
-    isLoad && refresh();
+    Modal.open({
+      key: editNetWorkKey,
+      title: formatMessage({ id: 'network.header.create' }),
+      style: { width: 740 },
+      okText: formatMessage({ id: 'edit' }),
+      drawer: true,
+      children: <EditNetwork
+        envId={parentId}
+        appId={id}
+        networkStore={networkStore}
+        refresh={refresh}
+        networkId={netDs.current.get('id')}
+      />,
+    });
   }
 
   function renderExpandedRow({ record }) {
@@ -293,7 +318,7 @@ const Networking = observer(() => {
       _.map(devopsIngressDTOS, ({ id: itemId, name, domain, error, status, pathList }) => {
         const buttons = [
           {
-            service: ['devops-service.devops-ingress.update'],
+            service: ['choerodon.code.project.deploy.app-deployment.resource.ps.delete-domain'],
             text: formatMessage({ id: 'delete' }),
             action: () => openDeleteModal(parentId, itemId, name, 'ingress', refresh),
           },
@@ -309,7 +334,7 @@ const Networking = observer(() => {
                 error={error}
                 clickAble={!disabled}
                 onClick={() => openDomainEdit(itemId)}
-                permissionCode={['devops-service.devops-ingress.delete']}
+                permissionCode={['choerodon.code.project.deploy.app-deployment.resource.ps.domain-detail']}
               />
             </div>
             {!disabled && (
@@ -363,27 +388,6 @@ const Networking = observer(() => {
           <Column name="type" renderer={renderConfigType} />
         </Table>
       </div>
-      {showDomain && (
-        <DomainModal
-          envId={parentId}
-          appServiceId={id}
-          id={domainId}
-          visible={showDomain}
-          type="edit"
-          store={domainStore}
-          onClose={closeDomainEdit}
-        />
-      )}
-      {showNetwork && (
-        <EditNetwork
-          netId={netDs.current.get('id')}
-          envId={parentId}
-          appServiceId={id}
-          visible={showNetwork}
-          store={networkStore}
-          onClose={closeNetworkEdit}
-        />
-      )}
     </div>
   );
 });

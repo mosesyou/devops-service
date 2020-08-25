@@ -2,6 +2,8 @@ package io.choerodon.devops.api.vo;
 
 import java.util.List;
 
+import org.hzero.starter.keyencrypt.core.Encrypt;
+
 import io.choerodon.devops.infra.dto.AppServiceVersionDTO;
 
 /**
@@ -9,12 +11,16 @@ import io.choerodon.devops.infra.dto.AppServiceVersionDTO;
  * @since 2019/8/13
  */
 public class AppServiceGroupInfoVO {
+    @Encrypt
     private Long id;
     private String name;
     private String code;
     private Long projectId;
+    @Encrypt
     private Long mktAppId;
     private String type;
+    @Encrypt
+    private Long versionId;
     private List<AppServiceVersionDTO> versions;
     private Boolean share;
     private String projectName;
@@ -90,5 +96,13 @@ public class AppServiceGroupInfoVO {
 
     public void setMktAppId(Long mktAppId) {
         this.mktAppId = mktAppId;
+    }
+
+    public Long getVersionId() {
+        return versionId;
+    }
+
+    public void setVersionId(Long versionId) {
+        this.versionId = versionId;
     }
 }

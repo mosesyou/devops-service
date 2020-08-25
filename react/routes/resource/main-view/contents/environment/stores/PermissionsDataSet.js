@@ -14,8 +14,8 @@ export default ({ formatMessage, intlPrefix }) => ({
       label: formatMessage({ id: `${intlPrefix}.environment.permission.name` }),
     },
     {
-      name: 'role',
-      type: 'string',
+      name: 'roles',
+      type: 'object',
       label: formatMessage({ id: `${intlPrefix}.environment.permission.role` }),
     },
     {
@@ -23,6 +23,7 @@ export default ({ formatMessage, intlPrefix }) => ({
       type: 'dateTime',
       label: formatMessage({ id: `${intlPrefix}.environment.permission.addTime` }),
     },
+    { name: 'iamUserId', type: 'string', textField: 'realName', valueField: 'iamUserId', label: formatMessage({ id: `${intlPrefix}.project.member` }) },
   ],
   queryFields: [
     {

@@ -4,7 +4,6 @@ import { observer } from 'mobx-react-lite';
 import { injectIntl } from 'react-intl';
 import { DataSet } from 'choerodon-ui/pro';
 import getTablePostData from '../../../../../../utils/getTablePostData';
-import BaseInfoDataSet from './BaseInfoDataSet';
 import PermissionsDataSet from './PermissionsDataSet';
 import GitopsLogDataSet from './GitopsLogDataSet';
 import GitopsSyncDataSet from './GitopsSyncDataSet';
@@ -13,6 +12,9 @@ import { useResourceStore } from '../../../../stores';
 import useStore from './useStore';
 import ConfigDataSet from './ConfigDataSet';
 import ConfigFormDataSet from './ConfigFormDataSet';
+import { useMainStore } from '../../../stores';
+import SummaryDataSet from './SummaryDataSet';
+import PolarisNumDataSet from './PalarisNumDataSet';
 
 const Store = createContext();
 
@@ -32,19 +34,25 @@ export const StoreProvider = injectIntl(inject('AppState')(
       resourceStore: { getSelectedMenu: { id } },
     } = useResourceStore();
 
+    const {
+      baseInfoDs,
+    } = useMainStore();
+
     const tabs = useMemo(() => ({
       SYNC_TAB: 'sync',
       CONFIG_TAB: 'config',
       ASSIGN_TAB: 'assign',
+      POLARIS_TAB: 'polaris',
     }), []);
     const envStore = useStore({ defaultTab: tabs.SYNC_TAB });
-    const baseInfoDs = useMemo(() => new DataSet(BaseInfoDataSet()), []);
     const permissionsDs = useMemo(() => new DataSet(PermissionsDataSet({ formatMessage, intlPrefix })), []);
     const gitopsLogDs = useMemo(() => new DataSet(GitopsLogDataSet({ formatMessage, intlPrefix })), []);
     const gitopsSyncDs = useMemo(() => new DataSet(GitopsSyncDataSet()), []);
     const retryDs = useMemo(() => new DataSet(RetryDataSet()), []);
     const configDs = useMemo(() => new DataSet(ConfigDataSet({ formatMessage, intlPrefix })), []);
-    const configFormDs = useMemo(() => new DataSet(ConfigFormDataSet({ formatMessage, intlPrefix, projectId, store: envStore })), [projectId]);
+    const configFormDs = useMemo(() => new DataSet(ConfigFormDataSet({ formatMessage, intlPrefix, projectId, store: envStore, envId: id })), [projectId, id]);
+    const istSummaryDs = useMemo(() => new DataSet(SummaryDataSet()), []);
+    const polarisNumDS = useMemo(() => new DataSet(PolarisNumDataSet()), []);
 
 
     function queryData() {
@@ -88,13 +96,26 @@ export const StoreProvider = injectIntl(inject('AppState')(
           };
           permissionsDs.query();
           break;
+        case tabs.POLARIS_TAB:
+          polarisNumDS.removeAll();
+          istSummaryDs.removeAll();
+          istSummaryDs.transport.read.url = `/devops/v1/projects/${projectId}/polaris/envs/${id}`;
+          polarisNumDS.transport.read.url = `devops/v1/projects/${projectId}/polaris/records?scope=env&scope_id=${id}`;
+          loadPolaris();
+          break;
         default:
       }
     }
 
+    async function loadPolaris() {
+      const res = await envStore.checkHasInstance(projectId, id);
+      if (res) {
+        polarisNumDS.query();
+        istSummaryDs.query();
+      }
+    }
+
     useEffect(() => {
-      baseInfoDs.transport.read.url = `/devops/v1/projects/${projectId}/envs/${id}/info`;
-      baseInfoDs.query();
       queryData();
     }, [projectId, id, envStore.getTabKey]);
 
@@ -113,6 +134,9 @@ export const StoreProvider = injectIntl(inject('AppState')(
       configDs,
       configFormDs,
       envStore,
+      intlPrefix,
+      polarisNumDS,
+      istSummaryDs,
     };
     return (
       <Store.Provider value={value}>

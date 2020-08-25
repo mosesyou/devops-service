@@ -11,8 +11,8 @@ export default ({ projectId, formatMessage, intlPrefix, modal, isEdit, afterOk, 
       projectId,
       clusterName: window.encodeURIComponent(value),
     }).then((res) => {
-      if (res && res.failed) {
-        messageName = `名称${formatMessage({ id: `${intlPrefix}.check.exist` })}`;
+      if ((res && res.failed) || !res) {
+        messageName = formatMessage({ id: 'checkNameExist' });
       }
     }).catch((e) => {
       messageName = `${formatMessage({ id: `${intlPrefix}.check.error` })}`;
@@ -30,9 +30,11 @@ export default ({ projectId, formatMessage, intlPrefix, modal, isEdit, afterOk, 
         projectId,
         clusterCode: value,
       }).then((res) => {
-        if (res && res.failed) {
-          messageCode = `编码${formatMessage({ id: `${intlPrefix}.check.exist` })}`;
+        if ((res && res.failed) || !res) {
+          messageCode = formatMessage({ id: 'checkCodeExist' });
         }
+      }).catch((e) => {
+        messageCode = formatMessage({ id: 'checkCodeFailed' });
       });
     }
     return messageCode;
@@ -78,23 +80,28 @@ export default ({ projectId, formatMessage, intlPrefix, modal, isEdit, afterOk, 
         method: 'post',
         data: JSON.stringify(data),
         transformResponse: ((res) => {
-          if (handlePromptError(res)) {
-            mainStore.setResponseData(res);
-            afterOk();
-            modal.close();
+          try {
+            const result = JSON.parse(res);
+            return result;
+          } catch (e) {
+            if (handlePromptError(res)) {
+              mainStore.setResponseData(res);
+              // afterOk();
+              // modal.close();
+            }
+            return res;
           }
-          return true;
         }),
       }),
       update: ({ data: [data] }) => ({
         url: `/devops/v1/projects/${projectId}/clusters/${data.id}?`,
         method: 'put',
-        data: JSON.stringify(data),
+        data,
       }),
     },
     events: {
       load: ({ dataSet }) => {
-        clusterName = dataSet.current.data.name;
+        clusterName = dataSet.current.get('name');
       },
     },
   };

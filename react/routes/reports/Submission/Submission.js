@@ -1,9 +1,10 @@
-import React, { Component, Fragment } from 'react';
+import React, { Fragment, useState, useEffect } from 'react';
 import { withRouter } from 'react-router-dom';
-import { observer } from 'mobx-react';
+import { observer } from 'mobx-react-lite';
 import { injectIntl, FormattedMessage } from 'react-intl';
-import { Page, Header, Content, stores, Breadcrumb } from '@choerodon/boot';
-import { Select, Button, Popover } from 'choerodon-ui';
+import { Page, Header, Content, Breadcrumb } from '@choerodon/boot';
+import { Select, Button, Form } from 'choerodon-ui/pro';
+// import { Select, Button } from 'choerodon-ui';
 import _ from 'lodash';
 import moment from 'moment';
 import ChartSwitch from '../Component/ChartSwitch';
@@ -15,151 +16,140 @@ import MaxTagPopover from '../Component/MaxTagPopover';
 import './Submission.less';
 import '../../main.less';
 import LoadingBar from '../../../components/loading';
+import { useReportsStore } from '../stores';
+import { useSubmissionStore } from './stores';
+
 
 /**
  * 将数据转为图表可用格式
  * @param data
  * @returns {{total, user: Array}}
  */
-function formatData(data) {
-  const { totalCommitsDate, commitFormUserVOList } = data;
-  const total = {};
-  const user = [];
-  if (totalCommitsDate && commitFormUserVOList) {
-    // total.items = _.countBy(totalCommitsDate, item => item.slice(0, 10));
-    total.items = totalCommitsDate.slice();
-    total.count = totalCommitsDate.length;
-    _.forEach(commitFormUserVOList, (item) => {
-      const { name, imgUrl, commitDates, id } = item;
-      const userTotal = {
-        name,
-        avatar: imgUrl,
-      };
-      userTotal.id = id;
-      // userTotal.items = _.countBy(commitDates, cit => cit.slice(0, 10));
-      userTotal.items = commitDates.slice();
-      userTotal.count = commitDates.length;
-      user.push(userTotal);
-    });
-  }
 
-  return {
-    total,
-    user,
-  };
-}
 
-const { AppState } = stores;
 const { Option } = Select;
 
-@observer
-class Submission extends Component {
-  constructor(props) {
-    super(props);
-    this.state = {
-      appId: null,
-      page: 1,
-      dateType: 'seven',
+const Submission = observer(() => {
+  const {
+    intl: { formatMessage },
+    AppState,
+    ReportsStore,
+    ReportsStore: {
+      getProRole,
+      getAllApps,
+      getCommits,
+      getCommitsRecord,
+      getCommitLoading,
+      getIsRefresh,
+      getHistoryLoad,
+      loadAllApps,
+      loadCommits,
+      loadCommitsRecord,
+      changeIsRefresh,
+    },
+    history,
+    history: {
+      location: { state, search },
+    },
+  } = useReportsStore();
+
+  const {
+    SubmissionSelectDataSet,
+  } = useSubmissionStore();
+
+  const [appId, setAppId] = useState(null);
+  const [page, setPage] = useState(1);
+  const [dateType, setDateType] = useState('seven');
+  const [index, setIndex] = useState(null);
+
+  const record = SubmissionSelectDataSet.current;
+
+  useEffect(() => {
+    ReportsStore.changeIsRefresh(true);
+    loadData();
+    return () => {
+      ReportsStore.setAllApps([]);
+      ReportsStore.setCommits({});
+      ReportsStore.setCommitsRecord([]);
+      ReportsStore.setStartTime(moment().subtract(6, 'days'));
+      ReportsStore.setEndTime(moment());
+      ReportsStore.setStartDate(null);
+      ReportsStore.setEndDate(null);
+    };
+  }, []);
+
+  useEffect(() => {
+    record.set('apps', appId);
+  }, [appId]);
+
+  const handleRefresh = () => loadData();
+
+  function formatData(data) {
+    const { totalCommitsDate, commitFormUserVOList } = data;
+    const total = {};
+    const user = [];
+    if (totalCommitsDate && commitFormUserVOList) {
+      // total.items = _.countBy(totalCommitsDate, item => item.slice(0, 10));
+      total.items = totalCommitsDate.slice();
+      total.count = totalCommitsDate.length;
+      _.forEach(commitFormUserVOList, (item) => {
+        const { name, imgUrl, commitDates, id } = item;
+        const userTotal = {
+          name,
+          avatar: imgUrl,
+        };
+        userTotal.id = id;
+        // userTotal.items = _.countBy(commitDates, cit => cit.slice(0, 10));
+        userTotal.items = commitDates.slice();
+        userTotal.count = commitDates.length;
+        user.push(userTotal);
+      });
+    }
+
+    return {
+      total,
+      user,
     };
   }
-
-  componentDidMount() {
-    const { ReportsStore } = this.props;
-    ReportsStore.changeIsRefresh(true);
-    this.loadData();
-  }
-
-  componentWillUnmount() {
-    const { ReportsStore } = this.props;
-    ReportsStore.setAllApps([]);
-    ReportsStore.setCommits({});
-    ReportsStore.setCommitsRecord([]);
-    ReportsStore.setStartTime(moment().subtract(6, 'days'));
-    ReportsStore.setEndTime(moment());
-    ReportsStore.setStartDate(null);
-    ReportsStore.setEndDate(null);
-  }
-
-  handleRefresh = () => this.loadData();
-
 
   /**
    * 应用选择
    * @param e
    */
-  handleSelect = (e) => {
-    const {
-      ReportsStore: {
-        loadCommits,
-        loadCommitsRecord,
-        getStartTime,
-        getEndTime,
-      },
-    } = this.props;
-    const { id: projectId } = AppState.currentMenuType;
-    const startTime = getStartTime
-      .format()
-      .split('T')[0]
-      .replace(/-/g, '/');
-    const endTime = getEndTime
-      .format()
-      .split('T')[0]
-      .replace(/-/g, '/');
-    this.setState({ appId: e });
-    loadCommits(projectId, startTime, endTime, e);
-    loadCommitsRecord(projectId, startTime, endTime, e, 1);
+  const handleSelect = (e) => {
+    if (e.length === 0) {
+      ReportsStore.setAllApps([]);
+      ReportsStore.setCommits({});
+      ReportsStore.setCommitsRecord([]);
+    } else {
+      const { id: projectId } = AppState.currentMenuType;
+      const startTime = ReportsStore.getStartTime.format('YYYY-MM-DD HH:mm:ss');
+      const endTime = ReportsStore.getEndTime.format('YYYY-MM-DD HH:mm:ss');
+      setAppId(e);
+      loadCommits(projectId, startTime, endTime, e);
+      loadCommitsRecord(projectId, startTime, endTime, e, 1);
+    }
   };
 
-  handlePageChange = (page) => {
-    const {
-      ReportsStore: { loadCommitsRecord, getStartTime, getEndTime },
-    } = this.props;
-    const { appId } = this.state;
+  const handlePageChange = (pageCurrent) => {
     const { id: projectId } = AppState.currentMenuType;
-    const startTime = getStartTime
-      .format()
-      .split('T')[0]
-      .replace(/-/g, '/');
-    const endTime = getEndTime
-      .format()
-      .split('T')[0]
-      .replace(/-/g, '/');
-    this.setState({ page });
-    loadCommitsRecord(projectId, startTime, endTime, appId, page);
+    const startTime = ReportsStore.getStartTime.format('YYYY-MM-DD HH:mm:ss');
+    const endTime = ReportsStore.getEndTime.format('YYYY-MM-DD HH:mm:ss');
+    setPage(pageCurrent);
+    loadCommitsRecord(projectId, startTime, endTime, appId, pageCurrent);
   };
 
-  loadData = () => {
-    const {
-      ReportsStore: {
-        loadAllApps,
-        loadCommits,
-        loadCommitsRecord,
-        getStartTime,
-        getEndTime,
-        changeIsRefresh,
-      },
-      ReportsStore,
-      history: {
-        location: { state },
-      },
-    } = this.props;
+  const loadData = () => {
     let repoAppId = [];
     if (state && state.appId) {
       repoAppId = state.appId;
     }
     const { id: projectId } = AppState.currentMenuType;
-    const { page, appId, dateType } = this.state;
-    const startTime = getStartTime
-      .format()
-      .split('T')[0]
-      .replace(/-/g, '/');
-    const endTime = getEndTime
-      .format()
-      .split('T')[0]
-      .replace(/-/g, '/');
-    ReportsStore.changeIsRefresh(true);
+    const startTime = ReportsStore.getStartTime.format('YYYY-MM-DD HH:mm:ss');
+    const endTime = ReportsStore.getEndTime.format('YYYY-MM-DD HH:mm:ss');
+    changeIsRefresh(true);
     loadAllApps(projectId).then((data) => {
-      ReportsStore.changeIsRefresh(false);
+      changeIsRefresh(false);
       const appData = data;
       if (appData.length) {
         let selectApp = appId || _.map(appData, (item) => item.id);
@@ -167,34 +157,22 @@ class Submission extends Component {
           if (repoAppId.length) {
             selectApp = repoAppId;
           }
-          this.setState({ appId: selectApp });
+          setAppId(selectApp);
         }
         loadCommits(projectId, startTime, endTime, selectApp);
         loadCommitsRecord(projectId, startTime, endTime, selectApp, page);
+      } else {
+        ReportsStore.judgeRole(['choerodon.code.project.develop.app-service.ps.create']);
       }
     });
   };
 
-  handleRefreshChartByTimePicker() {
-    const {
-      ReportsStore: {
-        loadCommits,
-        loadCommitsRecord,
-        getStartTime,
-        getEndTime,
-      },
-    } = this.props;
+  function handleRefreshChartByTimePicker() {
     const { id: projectId } = AppState.currentMenuType;
-    const startTime = getStartTime
-      .format()
-      .split('T')[0]
-      .replace(/-/g, '/');
-    const endTime = getEndTime
-      .format()
-      .split('T')[0]
-      .replace(/-/g, '/');
-    loadCommits(projectId, startTime, endTime, this.state.appId);
-    loadCommitsRecord(projectId, startTime, endTime, this.state.appId, this.state.index);
+    const startTime = ReportsStore.getStartTime.format('YYYY-MM-DD HH:mm:ss');
+    const endTime = ReportsStore.getEndTime.format('YYYY-MM-DD HH:mm:ss');
+    loadCommits(projectId, startTime, endTime, appId);
+    loadCommitsRecord(projectId, startTime, endTime, appId, index);
   }
 
 
@@ -202,142 +180,121 @@ class Submission extends Component {
    * 选择今天、近7天和近30天的选项，当使用DatePick的时候清空type
    * @param type 时间范围类型
    */
-  handleDateChoose = (type) => this.setState({ dateType: type });
+  const handleDateChoose = (type) => {
+    setDateType(type);
+  };
 
-  maxTagNode = (data, value) => (
+  const maxTagNode = (data, value) => (
     <MaxTagPopover dataSource={data} value={value} />
   );
 
-  render() {
-    const {
-      intl: { formatMessage },
-      history,
-      ReportsStore,
-    } = this.props;
-    const {
-      location: { state, search },
-    } = history;
-    const backPath = state && state.backPath;
-    const {
-      getCommits,
-      getStartTime,
-      getEndTime,
-      getAllApps,
-      getCommitsRecord,
-      getIsRefresh,
-      getCommitLoading,
-      getStartDate,
-      getEndDate,
-      getHistoryLoad,
-    } = ReportsStore;
-    const { id, name, type, organizationId } = AppState.currentMenuType;
-    const { appId, dateType } = this.state;
-    const { total, user } = formatData(getCommits);
-    const options = _.map(getAllApps, (item) => (
-      <Option key={item.id} value={item.id}>
-        {item.name}
-      </Option>
-    ));
-    const personChart = _.map(user, (item) => (
-      <div key={item.id} className="c7n-report-submission-item">
-        <LineChart
-          languageType="report"
-          loading={getCommitLoading}
-          name={item.name || 'Unknown'}
-          color="#ff9915"
-          style={{ width: '100%', height: 176 }}
-          data={item}
-          start={getStartTime}
-          end={getEndTime}
-          hasAvatar
-        />
-      </div>
-    ));
+  const backPath = state && state.backPath;
+  const { id, name, type, organizationId } = AppState.currentMenuType;
+  const { total, user } = formatData(getCommits);
+  const options = _.map(getAllApps, (item) => (
+    <Option key={item.id} value={item.id}>
+      {item.name}
+    </Option>
+  ));
+  const personChart = _.map(user, (item) => (
+    <div key={item.id} className="c7n-report-submission-item">
+      <LineChart
+        languageType="report"
+        loading={getCommitLoading}
+        name={item.name || 'Unknown'}
+        color="#ff9915"
+        style={{ width: '100%', height: 176 }}
+        data={item}
+        start={ReportsStore.getStartTime}
+        end={ReportsStore.getEndTime}
+        hasAvatar
+      />
+    </div>
+  ));
 
-    const content = getAllApps.length ? (
-      <Fragment>
-        <div className="c7n-report-control c7n-report-select">
+  const content = getAllApps.length ? (
+    <Fragment>
+      <div className="c7n-report-control c7n-report-select">
+        <Form
+          dataSet={SubmissionSelectDataSet}
+          className="c7n-report-control-select"
+        >
           <Select
-            className=" c7n-report-control-select"
-            mode="multiple"
-            label={formatMessage({ id: 'chooseApp' })}
+            name="apps"
+            searchable
             placeholder={formatMessage({ id: 'report.app.noselect' })}
             maxTagCount={3}
-            value={appId || []}
-            maxTagPlaceholder={this.maxTagNode.bind(this, getAllApps)}
-            onChange={this.handleSelect}
-            optionFilterProp="children"
-            filter
+            // value={appId || []}
+            maxTagPlaceholder={(omittedValues) => maxTagNode(getAllApps, omittedValues)}
+            onChange={handleSelect}
+            // optionFilterProp="children"
+            // filter
           >
             {options}
           </Select>
-          <TimePicker
-            unlimit
-            startTime={getStartDate}
-            endTime={getEndDate}
-            func={this.handleRefreshChartByTimePicker}
-            store={ReportsStore}
-            type={dateType}
-            onChange={this.handleDateChoose}
+        </Form>
+        <TimePicker
+          unlimit
+          startTime={ReportsStore.getStartDate}
+          endTime={ReportsStore.getEndDate}
+          func={handleRefreshChartByTimePicker}
+          store={ReportsStore}
+          type={dateType}
+          onChange={handleDateChoose}
+        />
+      </div>
+
+      <div className="c7n-report-submission clearfix">
+        <div className="c7n-report-submission-overview">
+          <LineChart
+            languageType="report"
+            loading={getCommitLoading}
+            name="提交情况"
+            color="#4677dd"
+            style={{ width: '100%', height: 276 }}
+            data={total}
+            hasAvatar={false}
+            start={ReportsStore.getStartTime}
+            end={ReportsStore.getEndTime}
           />
         </div>
-
-        <div className="c7n-report-submission clearfix">
-          <div className="c7n-report-submission-overview">
-            <LineChart
-              languageType="report"
-              loading={getCommitLoading}
-              name="提交情况"
-              color="#4677dd"
-              style={{ width: '100%', height: 276 }}
-              data={total}
-              hasAvatar={false}
-              start={getStartTime}
-              end={getEndTime}
-            />
-          </div>
-          <div className="c7n-report-submission-history">
-            <CommitHistory
-              loading={getHistoryLoad}
-              onPageChange={this.handlePageChange}
-              dataSource={getCommitsRecord}
-            />
-          </div>
+        <div className="c7n-report-submission-history">
+          <CommitHistory
+            loading={getHistoryLoad}
+            onPageChange={handlePageChange}
+            dataSource={getCommitsRecord}
+          />
         </div>
-        <div className="c7n-report-submission-wrap clearfix">{personChart}</div>
-      </Fragment>
-    ) : (
-      <NoChart type="app" />
-    );
+      </div>
+      <div className="c7n-report-submission-wrap clearfix">{personChart}</div>
+    </Fragment>
+  ) : (
+    <NoChart getProRole={getProRole} type="app" />
+  );
 
-    return (
-      <Page
-        className="c7n-region"
-        service={[
-          'devops-service.application.listByActive',
-          'devops-service.devops-gitlab-commit.getCommits',
-          'devops-service.devops-gitlab-commit.getRecordCommits',
-        ]}
+  return (
+    <Page
+      className="c7n-region"
+      service={['choerodon.code.project.operation.chart.ps.commit']}
+    >
+      <Header
+        title={formatMessage({ id: 'report.submission.head' })}
+        backPath={
+          backPath
+          || `/charts${search}`
+        }
       >
-        <Header
-          title={formatMessage({ id: 'report.submission.head' })}
-          backPath={
-            backPath
-            || `/charts${search}`
-          }
-        >
-          <ChartSwitch history={history} current="submission" />
-          <Button icon="refresh" onClick={this.handleRefresh}>
-            <FormattedMessage id="refresh" />
-          </Button>
-        </Header>
-        <Breadcrumb title={formatMessage({ id: 'report.submission.head' })} />
-        <Content>
-          {getIsRefresh ? <LoadingBar display="getIsRefresh" /> : content}
-        </Content>
-      </Page>
-    );
-  }
-}
+        <ChartSwitch history={history} current="submission" />
+        <Button icon="refresh" onClick={handleRefresh}>
+          <FormattedMessage id="refresh" />
+        </Button>
+      </Header>
+      <Breadcrumb title={formatMessage({ id: 'report.submission.head' })} />
+      <Content>
+        {getIsRefresh ? <LoadingBar display="getIsRefresh" /> : content}
+      </Content>
+    </Page>
+  );
+});
 
 export default withRouter(injectIntl(Submission));

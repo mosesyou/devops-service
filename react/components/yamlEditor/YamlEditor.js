@@ -27,12 +27,15 @@ export default class YamlEditor extends Component {
     handleEnableNext: PropTypes.func,
     onValueChange: PropTypes.func,
     modeChange: PropTypes.bool,
+    showError: PropTypes.bool,
+    className: PropTypes.string,
   };
 
   static defaultProps = {
     readOnly: true,
     originValue: '',
     modeChange: true,
+    showError: true,
     handleEnableNext: () => {
     },
     onValueChange: () => {
@@ -52,7 +55,7 @@ export default class YamlEditor extends Component {
       lineNumbers: !props.readOnly,
       lineWrapping: true,
       viewportMargin: Infinity,
-      lint: !props.readOnly,
+      lint: !props.readOnly && props.showError,
       gutters: !props.readOnly ? ['CodeMirror-lint-markers'] : [],
     };
   }
@@ -109,12 +112,15 @@ export default class YamlEditor extends Component {
       value,
       modeChange,
       readOnly,
+      showError,
+      className,
     } = this.props;
     const { errorTip } = this.state;
 
     const wrapClass = classnames({
       'c7ncd-yaml-wrapper': true,
       'c7ncd-yaml-readonly': readOnly,
+      [className]: true,
     });
 
     return (
@@ -123,7 +129,7 @@ export default class YamlEditor extends Component {
           <CodeMirror
             modeChange={modeChange}
             options={this.options}
-            value={value}
+            value={value || ''}
             originValue={originValue}
             onChange={this.onChange}
             ref={(instance) => {
@@ -131,7 +137,7 @@ export default class YamlEditor extends Component {
             }}
           />
         </div>
-        {errorTip ? (
+        {showError && errorTip ? (
           <div className="c7ncd-yaml-error">
             <Icon type="error" className="c7ncd-yaml-error-icon" />
             <span className="c7ncd-yaml-error-msg">

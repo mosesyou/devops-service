@@ -2,12 +2,18 @@ package io.choerodon.devops.api.vo;
 
 import java.util.Date;
 
+import org.hzero.starter.keyencrypt.core.Encrypt;
+
 public class PipelineWebHookAttributesVO {
+    @Encrypt
     private Long id;
     private String status;
     private String sha;
     private String ref;
     private Date createdAt;
+    private Date finishedAt;
+    private Long duration;
+    private Boolean tag;
 
     public Long getId() {
         return id;
@@ -47,5 +53,29 @@ public class PipelineWebHookAttributesVO {
 
     public void setRef(String ref) {
         this.ref = ref;
+    }
+
+    public Date getFinishedAt() {
+        return finishedAt;
+    }
+
+    public void setFinishedAt(Date finishedAt) {
+        this.finishedAt = finishedAt;
+    }
+
+    public Long getDuration() {
+        return duration;
+    }
+
+    public void setDuration(Long duration) {
+        this.duration = duration;
+    }
+
+    public Boolean getTag() {
+        return tag;
+    }
+
+    public void setTag(Boolean tag) {
+        this.tag = tag;
     }
 }

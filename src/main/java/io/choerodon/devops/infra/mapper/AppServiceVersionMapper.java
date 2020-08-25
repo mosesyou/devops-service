@@ -8,12 +8,12 @@ import org.apache.ibatis.annotations.Param;
 
 import io.choerodon.devops.infra.dto.AppServiceLatestVersionDTO;
 import io.choerodon.devops.infra.dto.AppServiceVersionDTO;
-import io.choerodon.mybatis.common.Mapper;
+import io.choerodon.mybatis.common.BaseMapper;
 
 /**
  * Created by younger on 2018/3/28.
  */
-public interface AppServiceVersionMapper extends Mapper<AppServiceVersionDTO> {
+public interface AppServiceVersionMapper extends BaseMapper<AppServiceVersionDTO> {
 
     List<AppServiceVersionDTO> listApplicationVersion(
             @Param("projectId") Long projectId,
@@ -115,4 +115,16 @@ public interface AppServiceVersionMapper extends Mapper<AppServiceVersionDTO> {
     List<AppServiceVersionDTO> listVersions(@Param("appServiceVersionIds") List<Long> appServiceVersionIds);
 
     void deleteByIds(@Param("versionIds") Set<Long> versionIds);
+
+    AppServiceVersionDTO queryByShareVersion(@Param("appServiceId") Long appServiceId, @Param("projectId") Long projectId);
+
+    List<Long> selectAllAppServiceIdWithNullHarborConfig();
+
+    void updateNullHarborVersionToDefaultType(@Param("appServiceId") Long appServiceId);
+
+    void updateNullHarborVersionToCustomType(@Param("appServiceId") Long appServiceId, @Param("configId") Long harborConfigId);
+
+    void updateDefaultHarborRecords(@Param("defaultHarborId") Long defaultHarborId);
+
+    void updateCustomHarborRecords(@Param("defaultHarborId") Long defaultHarborId);
 }

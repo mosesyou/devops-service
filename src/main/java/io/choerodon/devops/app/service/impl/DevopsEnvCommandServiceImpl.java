@@ -2,22 +2,29 @@ package io.choerodon.devops.app.service.impl;
 
 import java.util.Date;
 import java.util.List;
+import java.util.Objects;
+import javax.annotation.Nullable;
 
-import com.github.pagehelper.PageHelper;
-import com.github.pagehelper.PageInfo;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.util.CollectionUtils;
 
-import io.choerodon.base.domain.PageRequest;
+import io.choerodon.core.domain.Page;
 import io.choerodon.core.exception.CommonException;
+import io.choerodon.devops.api.vo.kubernetes.Command;
 import io.choerodon.devops.app.service.DevopsCommandEventService;
 import io.choerodon.devops.app.service.DevopsEnvCommandLogService;
 import io.choerodon.devops.app.service.DevopsEnvCommandService;
 import io.choerodon.devops.app.service.DevopsEnvCommandValueService;
 import io.choerodon.devops.infra.dto.DevopsEnvCommandDTO;
+import io.choerodon.devops.infra.enums.ObjectType;
 import io.choerodon.devops.infra.mapper.DevopsEnvCommandMapper;
 import io.choerodon.devops.infra.util.ConvertUtils;
 import io.choerodon.devops.infra.util.PageRequestUtil;
+import io.choerodon.mybatis.pagehelper.PageHelper;
+import io.choerodon.mybatis.pagehelper.domain.PageRequest;
 
 /**
  * Creator: ChangpingShi0213@gmail.com
@@ -26,6 +33,7 @@ import io.choerodon.devops.infra.util.PageRequestUtil;
  */
 @Service
 public class DevopsEnvCommandServiceImpl implements DevopsEnvCommandService {
+    private static final Logger LOGGER = LoggerFactory.getLogger(DevopsEnvCommandServiceImpl.class);
 
     @Autowired
     DevopsEnvCommandValueService devopsEnvCommandValueService;
@@ -42,7 +50,7 @@ public class DevopsEnvCommandServiceImpl implements DevopsEnvCommandService {
         if (devopsEnvCommandMapper.insert(devopsEnvCommandDTO) != 1) {
             throw new CommonException("error.env.command.insert");
         }
-        return devopsEnvCommandDTO;
+        return devopsEnvCommandMapper.selectByPrimaryKey(devopsEnvCommandDTO);
     }
 
     @Override
@@ -64,7 +72,7 @@ public class DevopsEnvCommandServiceImpl implements DevopsEnvCommandService {
 
     @Override
     public void baseUpdateSha(Long commandId, String sha) {
-         devopsEnvCommandMapper.updateSha(commandId, sha);
+        devopsEnvCommandMapper.updateSha(commandId, sha);
     }
 
     @Override
@@ -85,8 +93,8 @@ public class DevopsEnvCommandServiceImpl implements DevopsEnvCommandService {
     }
 
     @Override
-    public PageInfo<DevopsEnvCommandDTO> basePageByObject(PageRequest pageRequest, String objectType, Long objectId, Date startTime, Date endTime) {
-        return PageHelper.startPage(pageRequest.getPage(),pageRequest.getSize(), PageRequestUtil.getOrderBy(pageRequest)).doSelectPageInfo(() ->
+    public Page<DevopsEnvCommandDTO> basePageByObject(PageRequest pageable, String objectType, Long objectId, Date startTime, Date endTime) {
+        return PageHelper.doPageAndSort(PageRequestUtil.simpleConvertSortForPage(pageable), () ->
                 devopsEnvCommandMapper.listByObject(objectType, objectId, startTime == null ? null : new java.sql.Date(startTime.getTime()), endTime == null ? null : new java.sql.Date(endTime.getTime())));
     }
 
@@ -113,5 +121,28 @@ public class DevopsEnvCommandServiceImpl implements DevopsEnvCommandService {
         devopsEnvCommandLogService.baseDeleteByCommandId(devopsEnvCommandDTO.getId());
         devopsCommandEventService.baseDeleteByCommandId(devopsEnvCommandDTO.getId());
         devopsEnvCommandMapper.deleteByPrimaryKey(devopsEnvCommandDTO.getId());
+    }
+
+    @Override
+    public List<Command> listCommandsToSync(Long envId, String beforeDate) {
+        return devopsEnvCommandMapper.listCommandsToSync(envId, beforeDate);
+    }
+
+    @Nullable
+    @Override
+    public DevopsEnvCommandDTO queryByInstanceIdAndCommitSha(Long instanceId, String sha) {
+        DevopsEnvCommandDTO condition = new DevopsEnvCommandDTO();
+        condition.setObjectId(Objects.requireNonNull(instanceId));
+        condition.setSha(Objects.requireNonNull(sha));
+        condition.setObject(ObjectType.INSTANCE.getType());
+        List<DevopsEnvCommandDTO> devopsEnvCommandDTOS = devopsEnvCommandMapper.select(condition);
+        if (CollectionUtils.isEmpty(devopsEnvCommandDTOS)) {
+            return null;
+        } else {
+            if (devopsEnvCommandDTOS.size() > 1) {
+                LOGGER.info("Unexpected multi-record for commands with instanceId {} and sha {}", instanceId, sha);
+            }
+            return devopsEnvCommandDTOS.get(0);
+        }
     }
 }

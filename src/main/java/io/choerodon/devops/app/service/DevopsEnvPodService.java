@@ -1,12 +1,12 @@
 package io.choerodon.devops.app.service;
 
-import java.util.List;
-
-import com.github.pagehelper.PageInfo;
-import io.choerodon.base.domain.PageRequest;
+import io.choerodon.core.domain.Page;
 import io.choerodon.devops.api.vo.DevopsEnvPodInfoVO;
 import io.choerodon.devops.api.vo.DevopsEnvPodVO;
 import io.choerodon.devops.infra.dto.DevopsEnvPodDTO;
+import io.choerodon.mybatis.pagehelper.domain.PageRequest;
+
+import java.util.List;
 
 /**
  * Created by Zenger on 2018/4/17.
@@ -18,11 +18,11 @@ public interface DevopsEnvPodService {
      * @param envId
      * @param appServiceId
      * @param instanceId
-     * @param pageRequest
+     * @param pageable
      * @param searchParam
      * @return PageInfp
      */
-    PageInfo<DevopsEnvPodVO> pageByOptions(Long projectId, Long envId, Long appServiceId, Long instanceId, PageRequest pageRequest, String searchParam);
+    Page<DevopsEnvPodVO> pageByOptions(Long projectId, Long envId, Long appServiceId, Long instanceId, PageRequest pageable, String searchParam);
 
     void fillContainers(DevopsEnvPodVO devopsEnvPodVO);
 
@@ -36,7 +36,7 @@ public interface DevopsEnvPodService {
 
     void baseUpdate(DevopsEnvPodDTO devopsEnvPodDTO);
 
-    PageInfo<DevopsEnvPodDTO> basePageByIds(Long projectId, Long envId, Long appServiceId, Long instanceId, PageRequest pageRequest, String searchParam);
+    Page<DevopsEnvPodDTO> basePageByIds(Long projectId, Long envId, Long appServiceId, Long instanceId, PageRequest pageable, String searchParam);
 
     void baseDeleteByName(String name, String namespace);
 
@@ -53,6 +53,6 @@ public interface DevopsEnvPodService {
      */
     List<DevopsEnvPodInfoVO> queryEnvPodInfo(Long envId, String sort);
 
-    void deleteEnvPodById(Long envId, Long podId);
+    void deleteEnvPodById(Long projectId, Long envId, Long podId);
 
 }

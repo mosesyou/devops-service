@@ -12,14 +12,14 @@ export default ({ formatMessage, intlPrefix, projectId, groupOptionDs }) => ({
       maxLength: 10,
     },
     {
-      maxLength: 60,
+      maxLength: 200,
       name: 'description',
       type: 'string',
       label: '环境描述',
     },
     {
       name: 'devopsEnvGroupId',
-      type: 'number',
+      type: 'string',
       textField: 'name',
       valueField: 'id',
       label: '选择分组',

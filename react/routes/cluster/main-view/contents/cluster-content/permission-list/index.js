@@ -3,7 +3,6 @@ import { Permission, Action } from '@choerodon/boot';
 import { Table } from 'choerodon-ui/pro';
 import { useClusterContentStore } from '../stores';
 
-
 const { Column } = Table;
 
 export default () => {
@@ -13,13 +12,20 @@ export default () => {
   function renderActions({ record }) {
     const actionData = [
       {
-        service: ['devops-service.devops-cluster.deleteCluster'],
+        service: ['choerodon.code.project.deploy.cluster.cluster-management.ps.permission-manage'],
         text: formatMessage({ id: 'delete' }),
         action: () => {
           PermissionDs.transport.destroy.params = {
             delete_project_id: record.get('id'),
           };
-          PermissionDs.delete(record);
+          const modalProps = {
+            title: formatMessage({ id: 'c7ncd.deployment.permission.delete.title' }),
+            children: formatMessage({ id: 'c7ncd.deployment.permission.project.delete.des' }),
+            okText: formatMessage({ id: 'delete' }),
+            okProps: { color: 'red' },
+            cancelProps: { color: 'dark' },
+          };
+          PermissionDs.delete(record, modalProps);
         },
       },
     ];
@@ -30,8 +36,9 @@ export default () => {
     <Table
       dataSet={PermissionDs}
       border={false}
+      pristine
     >
-      <Column name="name" width={200} />
+      <Column name="name" width={200} sortable />
       {cluster.get('skipCheckProjectPermission') ? null : <Column renderer={renderActions} />}
       <Column name="code" />
     </Table>

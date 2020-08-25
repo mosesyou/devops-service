@@ -7,9 +7,9 @@ import { Icon } from 'choerodon-ui';
 import { Modal } from 'choerodon-ui/pro';
 import { useResourceStore } from '../../../stores';
 import { useMainStore } from '../../stores';
-import DomainModal from '../../contents/ingress/modals/domain-create';
 import eventStopProp from '../../../../../utils/eventStopProp';
 import openWarnModal from '../../../../../utils/openWarnModal';
+import DomainForm from '../../components/domain-form';
 
 const modalKey = Modal.key();
 const modalStyle = {
@@ -29,11 +29,8 @@ function IngressItem({
     AppState: { currentMenuType: { projectId } },
   } = useResourceStore();
   const {
-    ingressStore,
     mainStore: { openDeleteModal },
   } = useMainStore();
-
-  const [showModal, setShowModal] = useState(false);
 
   function freshTree() {
     treeDs.query();
@@ -41,7 +38,7 @@ function IngressItem({
 
   function freshMenu() {
     freshTree();
-    const [envId] = record.get('parentId').split('-');
+    const [envId] = record.get('parentId').split('**');
     if (itemType === INGRESS_GROUP && envId === parentId) {
       setUpTarget({
         type: INGRESS_GROUP,
@@ -56,7 +53,7 @@ function IngressItem({
   }
 
   function getEnvIsNotRunning() {
-    const [envId] = record.get('parentId').split('-');
+    const [envId] = record.get('parentId').split('**');
     const envRecord = treeDs.find((item) => item.get('key') === envId);
     const connect = envRecord.get('connect');
     return !connect;
@@ -66,7 +63,7 @@ function IngressItem({
     return checkExist({
       projectId,
       type: 'ingress',
-      envId: record.get('parentId').split('-')[0],
+      envId: record.get('parentId').split('**')[0],
       id: record.get('id'),
     }).then((isExist) => {
       if (!isExist) {
@@ -84,13 +81,12 @@ function IngressItem({
           style: modalStyle,
           drawer: true,
           title: formatMessage({ id: 'domain.update.head' }),
-          children: <DomainModal
-            envId={record.get('parentId').split('-')[0]}
-            id={record.get('id')}
-            visible={showModal}
-            type="edit"
-            store={ingressStore}
+          children: <DomainForm
+            envId={record.get('parentId').split('**')[0]}
+            ingressId={record.get('id')}
             refresh={freshMenu}
+            intlPrefix={intlPrefix}
+            prefixCls="c7ncd-deployment"
           />,
           okText: formatMessage({ id: 'save' }),
         });
@@ -98,26 +94,21 @@ function IngressItem({
     });
   }
 
-  function closeModal(isLoad) {
-    setShowModal(false);
-    isLoad && freshMenu();
-  }
-
   function getSuffix() {
     const id = record.get('id');
     const ingressName = record.get('name');
-    const [envId] = record.get('parentId').split('-');
+    const [envId] = record.get('parentId').split('**');
     const status = record.get('status');
     const disabled = getEnvIsNotRunning() || status === 'operating';
     if (disabled) {
       return null;
     }
     const actionData = [{
-      service: ['devops-service.devops-ingress.update'],
+      service: ['choerodon.code.project.deploy.app-deployment.resource.ps.update.domain'],
       text: formatMessage({ id: 'edit' }),
       action: openModal,
     }, {
-      service: ['devops-service.devops-ingress.delete'],
+      service: ['choerodon.code.project.deploy.app-deployment.resource.ps.delete-domain'],
       text: formatMessage({ id: 'delete' }),
       action: () => openDeleteModal(envId, id, ingressName, 'ingress', freshMenu),
     }];
@@ -128,16 +119,6 @@ function IngressItem({
     <Icon type="language" />
     {name}
     {getSuffix()}
-    {showModal && (
-      <DomainModal
-        envId={record.get('parentId').split('-')[0]}
-        id={record.get('id')}
-        visible={showModal}
-        type="edit"
-        store={ingressStore}
-        onClose={closeModal}
-      />
-    )}
   </Fragment>;
 }
 

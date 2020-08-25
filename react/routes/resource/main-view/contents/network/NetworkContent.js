@@ -15,7 +15,7 @@ import ResourceListTitle from '../../components/resource-list-title';
 import { useResourceStore } from '../../../stores';
 import { useNetworkStore } from './stores';
 import Modals from './modals';
-import EditNetwork from './modals/network-edit';
+import EditNetwork from './modals/network-operation';
 import { useMainStore } from '../../stores';
 
 import './index.less';
@@ -42,8 +42,6 @@ const NetworkContent = observer(() => {
     intl: { formatMessage },
   } = useNetworkStore();
 
-  const [showModal, setShowModal] = useState(false);
-
   function refresh() {
     treeDs.query();
     networkDs.query();
@@ -67,19 +65,20 @@ const NetworkContent = observer(() => {
         error={error || ''}
         clickAble={!disabled}
         onClick={openModal}
-        permissionCode={['devops-service.devops-service.update']}
+        permissionCode={['choerodon.code.project.deploy.app-deployment.resource.ps.update-net']}
       />
     );
   }
 
   function renderTargetType({ record }) {
-    const { instances, labels } = record.get('target') || {};
-    const appId = record.get('appServiceId');
+    const { instances, selectors, targetAppServiceId } = record.get('target') || {};
 
     let type = 'EndPoints';
-    if (appId && instances && instances.length) {
+    if (targetAppServiceId) {
+      type = formatMessage({ id: 'all_instance' });
+    } else if (instances && instances.length) {
       type = formatMessage({ id: 'instance' });
-    } else if (labels) {
+    } else if (selectors) {
       type = formatMessage({ id: 'label' });
     }
 
@@ -87,11 +86,17 @@ const NetworkContent = observer(() => {
   }
 
   function renderTarget({ record }) {
-    const { instances, labels, endPoints } = record.get('target') || {};
+    const { instances, selectors, endPoints, targetAppServiceName, targetAppServiceId } = record.get('target') || {};
     const node = [];
     const port = [];
     const len = endPoints ? 2 : 1;
-    if (instances && instances.length) {
+    if (targetAppServiceId && targetAppServiceName) {
+      node.push(
+        <div className="net-target-item">
+          <span>{targetAppServiceName}</span>
+        </div>
+      );
+    } else if (instances && instances.length) {
       _.forEach(instances, ({ id: itemId, code, status }) => {
         const targetClass = classnames({
           'net-target-item': true,
@@ -111,12 +116,12 @@ const NetworkContent = observer(() => {
         }
       });
     }
-    if (!_.isEmpty(labels)) {
-      _.forEach(labels, (value, key) => node.push(
+    if (!_.isEmpty(selectors)) {
+      _.forEach(selectors, (value, key) => node.push(
         <div className="net-target-item" key={key}>
           <span>{key}</span>=<span>{value}</span>
         </div>,
-      ),);
+      ));
     }
     if (endPoints) {
       const targetIps = _.split(_.keys(endPoints)[0], ',');
@@ -125,7 +130,7 @@ const NetworkContent = observer(() => {
         <div className="net-target-item" key={index}>
           <span>{item}</span>
         </div>,
-      ),);
+      ));
       _.map(portList, (item, index) => {
         port.push(
           <div className="net-target-item" key={index}>
@@ -265,7 +270,7 @@ const NetworkContent = observer(() => {
     const name = record.get('name');
     const buttons = [
       {
-        service: ['devops-service.devops-service.delete'],
+        service: ['choerodon.code.project.deploy.app-deployment.resource.ps.delete-net'],
         text: formatMessage({ id: 'delete' }),
         action: () => openDeleteModal(parentId, id, name, 'service', refresh),
       },
@@ -283,6 +288,7 @@ const NetworkContent = observer(() => {
       children: <EditNetwork
         netId={networkDs.current.get('id')}
         envId={parentId}
+        appServiceId={networkDs.current.get('appServiceId')}
         store={networkStore}
         refresh={refresh}
       />,
@@ -300,7 +306,7 @@ const NetworkContent = observer(() => {
         border={false}
         queryBar="bar"
       >
-        <Column name="name" renderer={renderName} />
+        <Column name="name" renderer={renderName} sortable />
         <Column renderer={renderAction} width="0.7rem" />
         <Column renderer={renderTargetType} header={formatMessage({ id: `${intlPrefix}.application.net.targetType` })} width="1.2rem" />
         <Column renderer={renderTarget} header={formatMessage({ id: `${intlPrefix}.application.net.target` })} />

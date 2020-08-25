@@ -1,12 +1,12 @@
 package io.choerodon.devops.app.service;
 
-import java.util.List;
-
-import com.github.pagehelper.PageInfo;
-import io.choerodon.base.domain.PageRequest;
-import io.choerodon.devops.api.vo.SecretRespVO;
+import io.choerodon.core.domain.Page;
 import io.choerodon.devops.api.vo.SecretReqVO;
+import io.choerodon.devops.api.vo.SecretRespVO;
 import io.choerodon.devops.infra.dto.DevopsSecretDTO;
+import io.choerodon.mybatis.pagehelper.domain.PageRequest;
+
+import java.util.List;
 
 /**
  * Created by n!Ck
@@ -22,7 +22,7 @@ public interface DevopsSecretService {
      * @param secretReqVO 请求体
      * @return SecretRespVO
      */
-    SecretRespVO createOrUpdate(SecretReqVO secretReqVO);
+    SecretRespVO createOrUpdate(Long projectId, SecretReqVO secretReqVO);
 
     /**
      * 删除密钥
@@ -31,7 +31,7 @@ public interface DevopsSecretService {
      * @param secretId 密钥id
      * @return Boolean
      */
-    Boolean deleteSecret(Long envId, Long secretId);
+    Boolean deleteSecret(Long projectId, Long envId, Long secretId);
 
     /**
      * 删除密钥,GitOps
@@ -60,13 +60,13 @@ public interface DevopsSecretService {
      * 分页查询secret
      *
      * @param envId        环境id
-     * @param pageRequest  分页参数
+     * @param pageable     分页参数
      * @param params       查询参数
      * @param appServiceId 服务id
      * @param toDecode     是否解码值
      * @return Page
      */
-    PageInfo<SecretRespVO> pageByOption(Long envId, PageRequest pageRequest, String params, Long appServiceId, boolean toDecode);
+    Page<SecretRespVO> pageByOption(Long envId, PageRequest pageable, String params, Long appServiceId, boolean toDecode);
 
     /**
      * 根据密钥id查询密钥
@@ -78,12 +78,22 @@ public interface DevopsSecretService {
     SecretRespVO querySecret(Long secretId, boolean toDecode);
 
     /**
-     * 校验名字唯一性
+     * 校验名字合法性
      *
      * @param envId 环境id
      * @param name  密钥名
+     * @return true表示通过
      */
-    void checkName(Long envId, String name);
+    boolean checkName(Long envId, String name);
+
+    /**
+     * 判断名字唯一性
+     *
+     * @param envId 环境id
+     * @param name  密钥名
+     * @return true表示通过
+     */
+    boolean isNameUnique(Long envId, String name);
 
     SecretReqVO dtoToReqVo(DevopsSecretDTO devopsSecretDTO);
 
@@ -97,11 +107,13 @@ public interface DevopsSecretService {
 
     void baseDelete(Long secretId);
 
+    void baseDeleteSecretByEnvId(Long envId);
+
     void baseCheckName(String name, Long envId);
 
     DevopsSecretDTO baseQueryByEnvIdAndName(Long envId, String name);
 
-    PageInfo<DevopsSecretDTO> basePageByOption(Long envId, PageRequest pageRequest, String params, Long appServiceId);
+    Page<DevopsSecretDTO> basePageByOption(Long envId, PageRequest pageable, String params, Long appServiceId);
 
     List<DevopsSecretDTO> baseListByEnv(Long envId);
 }
